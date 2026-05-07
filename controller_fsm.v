@@ -6,14 +6,16 @@ module controller_fsm(
     //  2 |  2 | 2  |  1 | 4  |  1  | 2 |
     // r0 | r1 | r2 | A | ALU | SR | G |
 );
-    wire opcode = instruction[15:11];
+    wire opcode = instruction[15:11]; 
+    // 4 bits 
 
-    always @(posedge clk) begin 
+    always @(posedge clk) begin
         case (opcode)
             `ADD: control_plane = 13'd0;
             `SUB: control_plane = 13'd0;
             `MOV: control_plane = 13'd0;
             `LDI: control_plane = 13'd0;
+            default control_plane = 13'd0; // Should never hit!
         endcase
     end
 endmodule
