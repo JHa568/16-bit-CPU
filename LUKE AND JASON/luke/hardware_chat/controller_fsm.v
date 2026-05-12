@@ -234,9 +234,13 @@ R0 -> bus -> A
                 if (opcode == SUB)
                     alu_op = 1'b1;
                 G_en = 1;
-
             end
-
+/*
+ry goes onto bus 
+G_en =1, so the ALU result stored into G. 
+For Add: G = A+Ry
+For SUB: G=A-Ry
+*/
             // EXEC3
             // Write G back into Rx
 
@@ -249,12 +253,21 @@ R0 -> bus -> A
                 endcase
             end
             // DONE
+/*
+bus_sel = BUS_G, puts ALU result on the bus
+then anable rx which is G -> bus --> RX
+So then ADD R0, R1 final step: R0 = G
+*/
 
             DONE: begin
                 done = 1;
             end
 
         endcase
+/*
+done = 1, tells the test bench and top module that the instructiosn are done. 
+so like whole point of this is that LDI/MOV is 1 step and ADD/SUB is 3 steps. 
+*/
 
     end
 
