@@ -23,7 +23,7 @@ module processor_TB;
     wire done;
 
     // Opcodes
-    parameter LDI = 2'b00;
+    parameter LDI = 2'b00; 
     parameter MOV = 2'b01;
     parameter ADD = 2'b10;
     parameter SUB = 2'b11;
@@ -44,24 +44,32 @@ module processor_TB;
 
     // Task to run one instruction
     task run_instruction;
-        input [1:0] op;
-        input [1:0] dest;
-        input [1:0] src;
-        input [15:0] imm;
-        begin
-            opcode = op;
-            rx = dest;
-            ry = src;
-            immediate = imm;
+    input [1:0] op;
+    input [1:0] dest;
+    input [1:0] src;
+    input [15:0] imm;
+    begin
+        // Set instruction fields
+        opcode = op;
+        rx = dest;
+        ry = src;
+        immediate = imm;
 
-            run = 1'b1;
-            #10;
-            run = 1'b0;
+        // Start instruction on clock edge
+        @(posedge clk);
+        run = 1'b1;
 
-            wait(done == 1'b1);
-            #10;
-        end
-    endtask
+        @(posedge clk);
+        run = 1'b0;
+
+        // Wait until instruction finishes
+        wait(done == 1'b1);
+
+        // Wait for done to go back low before next instruction
+        @(posedge clk);
+        wait(done == 1'b0);
+    end
+endtask
 
     initial begin
         $dumpfile("processor.vcd");
