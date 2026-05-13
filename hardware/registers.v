@@ -4,7 +4,7 @@ module register_16bit(
     input load, // load new value
     input o_en, // output enabled
     input [15:0] d, // data
-    output reg [15:0] o // output
+    output [15:0] o // output
 );
     reg [15:0] data_wire;
 

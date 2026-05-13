@@ -6,18 +6,18 @@ module register_file(
     output [15:0] output_bus 
 );
     
-    wire R1_en = control_plane[0];
-    wire R1_tri = control_plane[1]; 
-    wire R2_en = control_plane[2]; 
-    wire R2_tri = control_plane[3]; 
-    wire R3_en = control_plane[4]; 
-    wire R3_tri = control_plane[5];
+    wire R1_en = control_plane[5];
+    wire R1_tri = control_plane[4]; 
+    wire R2_en = control_plane[3]; 
+    wire R2_tri = control_plane[2]; 
+    wire R3_en = control_plane[1]; 
+    wire R3_tri = control_plane[0];
 
     register_16bit R1 (
         .clk(clk), 
         .rst(rst), 
         .load(R1_en), 
-        .o_en(R1_en), 
+        .o_en(R1_tri), 
         .d(input_bus), 
         .o(output_bus));
 
@@ -25,7 +25,7 @@ module register_file(
         .clk(clk), 
         .rst(rst), 
         .load(R2_en), 
-        .o_en(R2_en), 
+        .o_en(R2_tri), 
         .d(input_bus), 
         .o(output_bus));
 
@@ -33,7 +33,7 @@ module register_file(
         .clk(clk), 
         .rst(rst), 
         .load(R3_en), 
-        .o_en(R3_en), 
+        .o_en(R3_tri), 
         .d(input_bus), 
         .o(output_bus));
 

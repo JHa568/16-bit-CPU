@@ -2,7 +2,7 @@ module controller_fsm(
     input clk,
     input status_register, // ALU SR
     input [15:0] instruction,
-    
+    input [15:0] curr_comm_bus,
     output [1:0] r0,
     output [1:0] r1,
     output [1:0] r2,
@@ -10,6 +10,8 @@ module controller_fsm(
     output [3:0] ALU,  
     output [4:0] SR,
     output [1:0] G,
+    output bus_en, // Bus MUX 
+    output [15:0] out_comm_bus,
 
     // JASON AND LUKE IMPLEMENT:
     // Program counter
@@ -31,7 +33,7 @@ module controller_fsm(
     wire [3:0] opcode; 
     wire [11:0] params; 
     reg [2:0] controller_state;
-    reg [19:0] control_plane;
+    reg [20:0] control_plane;
 
     initial begin
         controller_state = C_FETCH;
@@ -40,7 +42,7 @@ module controller_fsm(
     end
 
     always @(posedge clk) begin
-        control_plane = 20'd0;
+        control_plane = 21'd0;
         case (controller_state);
             `C_FETCH: begin
                 instruction_end = 1'b1;
@@ -60,7 +62,7 @@ module controller_fsm(
                 controller_state <= `C_WRITE;
             end
             `C_WRITE: begin
-                writeback_step(op_code, params, control_plane);
+                writeback_step(op_code, params, curr_comm_bus, control_plane, out_comm_bus);
                 controller_state <= `C_FETCH;
             end
             default: 
@@ -68,6 +70,9 @@ module controller_fsm(
     end
     
     // Assign the control plane the wires
+    // Mux enable flag for bus
+    assign bus_en = control_plane[20];
+
     // Registers at the top
     assign r0 = control_plane[19:18]
     assign r1 = control_plane[17:16]

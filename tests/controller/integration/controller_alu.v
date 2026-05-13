@@ -26,13 +26,14 @@ module controller_alu();
         clk = 0;
         instruction = 16'h0000; // ADD R1 R2
         comm_bus = 16'h0000;
-    
+
         counter = 4'd0;
 
         #20000
         $finish
     end
 
+    wire bus_en; // Flag to write to the bus
     wire [5:0] reg_wires;
     wire [3:0] alu_reg_wires;
 
@@ -42,6 +43,10 @@ module controller_alu();
     
     assign alu_reg_wires[3:2] = A;
     assign alu_reg_wires[1:0] = G;
+
+    bus_mux comm_bus(.immediate(comm_bus),
+                    .bus_en(bus_en),
+                    .bus_out(comm_bus));
 
     register_file reg_file(.clk(clk), .rst(1'b0), .control_plane(reg_wires), .bus(comm_bus), .output_bus(comm_bus));
     
@@ -82,5 +87,4 @@ module controller_alu();
         .SR(SR),
         .G(G)
     );
-
 endmodule

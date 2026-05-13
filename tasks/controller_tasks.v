@@ -2,7 +2,7 @@
 task load_step;
     input [3:0] opcode;
     input [11:0] params;
-    output reg [19:0] control_plane
+    output reg [20:0] control_plane
     begin
         `include "../../constants.v";
         `include "./register_tasks.v";
@@ -16,10 +16,6 @@ task load_step;
                     get_register(Rx, `OUTPUT, control_plane, control_plane);
                     get_register(`A, `STORE, control_plane, control_plane);
                 end
-                `MOV: begin
-                end
-                `LDI: begin
-                end
                 default: begin end
             endcase
         end
@@ -30,7 +26,7 @@ endtask
 task execute_step;
     input [3:0] opcode;
     input [11:0] params;
-    output reg [19:0] control_plane
+    output reg [20:0] control_plane
     begin
         `include "../../constants.v";
         `include "./register_tasks.v";
@@ -45,10 +41,6 @@ task execute_step;
                     get_register(Ry, `OUTPUT, control_plane, control_plane);
                     get_register(`G, `STORE, control_plane, control_plane);
                 end
-                `MOV: begin
-                end
-                `LDI: begin
-                end
                 default: begin end
             endcase
         end
@@ -59,12 +51,17 @@ endtask
 task writeback_step;
     input [3:0] opcode;
     input [11:0] params;
-    output reg [19:0] control_plane;
+    input [15:0] curr_comm_bus;
+    output reg [20:0] control_plane;
+    output reg [15:0] comm_bus;
 
     begin
         `include "../../constants.v";
         `include "./register_tasks.v";
 
+        reg [1:0] Rx = params[11:10]; // Used by SUB, ADD, MOV, LDI
+        reg [1:0] Ry = params[9:8]; // Used by SUB, ADD, MOV
+        reg [3:0] D = params[9:6]; // Used by LDI
         always @(*) begin
             case(opcode)
                 `ADD, `SUB: begin
@@ -72,10 +69,15 @@ task writeback_step;
                     get_register(Rx, `STORE, control_plane, control_plane);
                 end
                 `MOV: begin
-                    $display("MOV not implemented!");
+                    get_register(Rx, `OUTPUT, control_plane, control_plane);
+                    get_register(Ry, `STORE, control_plane, control_plane);
+                    $display("MOV has been done!");
                 end
                 `LDI: begin
-                    $display("LDI not implemented!");
+                    get_register(Rx, `STORE, control_plane, control_plane);
+                    control_plane[20] = 1'b1;
+                    comm_bus[3:0] = D;
+                    $display("LDI has been done!");
                 end
                 default: begin end
             endcase
