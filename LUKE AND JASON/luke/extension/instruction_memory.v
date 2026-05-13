@@ -14,6 +14,7 @@ module instruction_memory(
     input [7:0] address,          // Address from PC
     output [15:0] instruction     // Instruction at that address
 );
+/*
     // Memory array
     // 256 memory locations
     reg [15:0] memory [255:0];
@@ -29,7 +30,8 @@ module instruction_memory(
         memory[3] = 16'b0011_00_01_00000000;
         // Address 4: MOV R2, R0
         memory[4] = 16'b0001_10_00_00000000;
-
+     end
+*/
 /*
 R0:0 → 5 → 8 → 5
 R1: 0 → 3
@@ -37,7 +39,7 @@ R2:0 → 5
 */
 
 
-/*
+reg [15:0] memory [255:0];
 initial begin
     // R0 = 5
     memory[0]  = 16'b0000_00_00_00000101; // LDI R0, 5
@@ -93,6 +95,8 @@ initial begin
     // Stop
     memory[17] = 16'b1111_00_00_00000000; // HALT
 end
+
+/*
 R0 = 0
 R1 = 7
 R2 = 9
@@ -109,7 +113,7 @@ break is up into 0010 00 01 00000000
 [7:0] - immediate
 */
 
-    end
+   
     // Output instruction at current address
     assign instruction = memory[address];
 
