@@ -3,7 +3,8 @@ module register_file(
     input rst,
     input wire [5:0] control_plane,
     input [15:0] input_bus,
-    output [15:0] output_bus 
+    output [15:0] output_bus, 
+    output bus_en
 );
     
     wire R1_en = control_plane[5];
@@ -12,6 +13,8 @@ module register_file(
     wire R2_tri = control_plane[2]; 
     wire R3_en = control_plane[1]; 
     wire R3_tri = control_plane[0];
+
+    assign bus_en = R1_tri | R2_tri | R3_tri;
 
     register_16bit R1 (
         .clk(clk), 
