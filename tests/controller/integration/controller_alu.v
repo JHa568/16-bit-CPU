@@ -1,90 +1,199 @@
-module controller_alu();
+module controller_alu;
     reg clk;
-    
-    wire [15:0] instruction;
+    reg status_register;
 
-    wire [1:0] r0;
-    wire [1:0] r1;
-    wire [1:0] r2;
-    wire [1:0] A;
-    wire [3:0] ALU;  
+    reg [15:0] instruction;
+    wire [1:0] r0, r1, r2, A, G;
+    wire [3:0] ALU;
     wire [4:0] SR;
-    wire [1:0] G; 
+    wire [3:0] bus_sel;
+    wire [15:0] imm_bus;
+    wire [15:0] alu_bus;
+    wire [15:0] reg_bus;
+    wire [15:0] bus;
 
-    wire [15:0] comm_bus;
+    integer pass = 0;
+    integer fail = 0;
 
-    // ONLY used in test bench
-    reg [3:0] counter;
-
-    initial begin
-        // ----- For Mac Users ------
-        // Remove if needed
-        $dumpfile("ctrl_alu.vcd");
-        $dumpvars(0, controller_alu);
-        // --------------------------
-
-        clk = 0;
-        instruction = 16'h0000; // ADD R1 R2
-        comm_bus = 16'h0000;
-
-        counter = 4'd0;
-
-        #20000
-        $finish
-    end
-
-    wire bus_en; // Flag to write to the bus
-    wire [5:0] reg_wires;
-    wire [3:0] alu_reg_wires;
-
-    assign reg_wires[1:0] = r0;
-    assign reg_wire[3:2]  = r1;
-    assign reg_wire[4:5]  = r2;
-    
-    assign alu_reg_wires[3:2] = A;
-    assign alu_reg_wires[1:0] = G;
-
-    bus_mux comm_bus(.immediate(comm_bus),
-                    .bus_en(bus_en),
-                    .bus_out(comm_bus));
-
-    register_file reg_file(.clk(clk), .rst(1'b0), .control_plane(reg_wires), .bus(comm_bus), .output_bus(comm_bus));
-    
-    wire [15:0] Rx;
-    wire [15:0] G_wires;
-    wire [4:0] SR; // Status register.
-
-    // NOTE: keep register wires consistent convention
-    register_16bit A_register(
-        .clk(clk), 
-        .rst(1'b0), 
-        .load(alu_reg_wires[3]), 
-        .o_en(alu_reg_wires[2]), 
-        .d(comm_bus), 
-        .o(Rx)
+    ALU_component alu (
+        .clk(clk),
+        .rst(1'b0),
+        .alu_ctl(ALU),
+        .control_plane({A, G}),
+        .input_bus(bus),
+        .output_bus(alu_bus)
     );
-
-    register_16bit G_register(
-        .clk(clk), 
-        .rst(1'b0), 
-        .load(alu_reg_wires[1]), 
-        .o_en(alu_reg_wires[0]),
-        .d(G_wires), 
-        .o(comm_bus)
-    );
-
-    ALU alu_component(.alu_ctl(ALU), .a(Rx), .b(comm_bus), .result(G_wires), .status(SR));
-
-    controller_fsm control(
-        .clk(clk), 
-        .status_register(SR), 
-        .instruction(instruction), 
-        .r0(r0),
-        .r1(r1),
-        .r2(r2),
+    
+    controller_fsm dut (
+        .clk(clk),
+        .status_register(status_register),
+        .instruction(instruction),
+        .curr_comm_bus(bus),
+        .r0(r0), .r1(r1), .r2(r2),
         .A(A),
         .ALU(ALU),
         .SR(SR),
-        .G(G)
+        .G(G),
+        .bus_sel(bus_sel),
+        .out_comm_bus(imm_bus)
     );
-endmodule
+
+    bus_mux mux (
+        .immediate (imm_bus),
+        .alu       (alu_bus),
+        .registers (reg_bus),
+        .bus_sel   (bus_sel),
+        .bus_out   (bus)
+    );
+
+    register_file rf (
+        .clk(clk),
+        .rst(1'b0),
+        .control_plane({r0, r1, r2}),
+        .input_bus(bus),
+        .output_bus(reg_bus)
+    );
+
+    always #5 clk = ~clk;
+
+    task tick;
+        begin
+            #10;
+        end
+    endtask
+
+    task check;
+        input [63:0] cond;
+        input [127:0] msg;
+        begin
+            if (cond) begin
+                $display("  [PASS] %s", msg);
+                pass = pass + 1;
+            end else begin
+                $display("  [FAIL] %s", msg);
+                fail = fail + 1;
+            end
+        end
+    endtask
+
+    initial begin
+        $dumpfile("alu.vcd");
+        $dumpvars(0, controller_alu);
+        $display("\n╔══════════════════════════════════════════════╗");
+        $display("║              ALU Integration Suite          ║");
+        $display("╚══════════════════════════════════════════════╝");
+
+        clk = 0;
+        status_register = 0;
+
+        // ═══════════════════════════════════════════════
+        // TEST 1: ADD — 0x0005 + 0x0003 = 0x0008
+        // ═══════════════════════════════════════════════
+        $display("\n[TEST 1] ADD: 0x0005 + 0x0003 = 0x0008");
+
+        // Step 1a: LDI R0, 0x05  (first operand into R0)
+        instruction = {`LDI, `R0, 8'h05};
+        tick(); tick(); tick(); tick(); tick();
+
+        // Step 1c: LDI R1, 0x03  (second operand, will be on bus during ALU compute)
+        instruction = {`LDI, `R1, 8'h03};
+        tick(); tick(); tick(); tick(); tick();
+
+        $display("------------------ BEGIN ADD -------------------");
+        instruction = {`ADD, `R0, `R1, 4'h0};
+        tick(); tick(); tick(); tick(); tick();
+
+        // Step 1e: Read G onto bus
+        force G = 2'b01;   // G_en=0, G_tri=1 (G drives output_bus)
+        #1;
+        $display("  alu_bus = %h", alu_bus);
+        check(alu_bus == 16'h0008, "ADD 0x0005 + 0x0003 = 0x0008");
+        release G;
+        release A;
+
+        // ═══════════════════════════════════════════════
+        // TEST 2: ADD with carry boundary — 0x00FF + 0x0001 = 0x0100
+        // ═══════════════════════════════════════════════
+        $display("\n[TEST 2] ADD boundary: 0x00FF + 0x0001 = 0x0100");
+
+        instruction = {`LDI, `R0, 8'hFF};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`LDI, `R1, 8'h01};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`ADD, `R0, `R1, 4'h0};
+        tick(); tick(); tick(); tick(); tick();
+
+        force G = 2'b01;
+        #1;
+        $display("  alu_bus = %h", alu_bus);
+        check(alu_bus == 16'h0100, "ADD 0x00FF + 0x0001 = 0x0100");
+        release G; release A;
+
+        // ═══════════════════════════════════════════════
+        // TEST 3: SUB — 0x000A - 0x0003 = 0x0007
+        // ═══════════════════════════════════════════════
+        $display("\n[TEST 3] SUB: 0x000A - 0x0003 = 0x0007");
+
+        instruction = {`LDI, `R0, 8'h0A};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`LDI, `R1, 8'h03};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`SUB, `R0, `R1, 4'h0};
+        tick(); tick(); tick(); tick(); tick();
+
+        force G = 2'b01;
+        #1;
+        $display("  alu_bus = %h", alu_bus);
+        check(alu_bus == 16'h0007, "SUB 0x000A - 0x0003 = 0x0007");
+        release G; release A;
+
+        // ═══════════════════════════════════════════════
+        // TEST 4: SUB underflow — 0x0000 - 0x0001 = 0xFFFF
+        // ═══════════════════════════════════════════════
+        $display("\n[TEST 4] SUB underflow: 0x0000 - 0x0001 = 0xFFFF");
+
+        instruction = {`LDI, `R0, 8'h00};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`LDI, `R1, 8'h01};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`SUB, `R0, `R1, 4'h0};
+        tick(); tick(); tick(); tick(); tick();
+
+        force G = 2'b01;
+        #1;
+        $display("  alu_bus = %h", alu_bus);
+        check(alu_bus == 16'hFFFF, "SUB 0x0000 - 0x0001 = 0xFFFF (underflow)");
+        release G; release A;
+
+        // ═══════════════════════════════════════════════
+        // TEST 5: ADD zero identity — 0x00AB + 0x0000 = 0x00AB
+        // ═══════════════════════════════════════════════
+        $display("\n[TEST 5] ADD zero identity: 0x00AB + 0x0000 = 0x00AB");
+
+        instruction = {`LDI, `R0, 8'hAB};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`LDI, `R1, 8'h00};
+        tick(); tick(); tick(); tick(); tick();
+
+        instruction = {`ADD, `R0, `R1, 4'h0};
+        tick(); tick(); tick(); tick(); tick();
+
+        force G = 2'b01;
+        #1;
+        $display("  alu_bus = %h", alu_bus);
+        check(alu_bus == 16'h00AB, "ADD 0x00AB + 0x0000 = 0x00AB (identity)");
+        release G; release A;
+
+        $display("\n╔══════════════════════════════════════════════╗");
+        $display("║ Results: %0d passed, %0d failed             ║", pass, fail);
+        $display("╚══════════════════════════════════════════════╝");
+        $finish;
+    end
+endmodule 

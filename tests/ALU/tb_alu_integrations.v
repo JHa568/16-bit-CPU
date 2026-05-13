@@ -48,7 +48,9 @@ module tb_ALU_integrations;
   // ── Instantiations ───────────────────────────────────────────────────────
   bus_mux mux (
     .immediate (immediate),
-    .bus_en    (bus_en),
+    .alu       (16'h0000),
+    .registers (16'h0000),
+    .bus_sel   (4'd1),
     .bus_out   (input_bus)
   );
 

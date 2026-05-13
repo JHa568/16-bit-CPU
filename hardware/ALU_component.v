@@ -4,16 +4,14 @@ module ALU_component(
     input [3:0] alu_ctl,
     input [3:0] control_plane,
     input [15:0] input_bus,
-    output [15:0] output_bus,
-    output bus_en
+    output [15:0] output_bus
 );  
     wire [15:0] accumulator_wire, g_reg_wire;
     wire [4:0] status_reg_wire;
     wire A_en = control_plane[3];
-    wire A_tri = control_plane[2];
+    wire A_tri = |alu_ctl;
     wire G_en = control_plane[1];
     wire G_tri = control_plane[0];
-    assign bus_en = 1'b0;
 
     register_16bit A(
         .clk(clk), 
@@ -32,22 +30,12 @@ module ALU_component(
         .d(g_reg_wire), 
         .o(output_bus)
     ); // G register to store the computed module
-    
-    // test later
-    // register_16bit SR(
-    //     .clk(clk), 
-    //     .rst(rst), 
-    //     .load(1'b1), 
-    //     .o_en(1'b0), 
-    //     .d(status_reg_wire), 
-    //     .o()
-    // ); // Status register
 
     ALU alu_compute(
         .alu_ctl(alu_ctl), 
         .a(accumulator_wire), 
         .b(input_bus),
         .result(g_reg_wire),
-        .status()
-    );
+        .status() // Not handling this at the moment
+    ); 
 endmodule
