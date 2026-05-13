@@ -57,7 +57,7 @@ module processor_top(
     assign opcode = instruction[15:12];
     assign rx = instruction[11:10];
     assign ry = instruction[9:8];
-    assign immediate = instruction[7:0]
+    assign immediate = instruction[7:0];
 
     assign pc_debug = pc_out;
     assign instruction_debug = instruction;
@@ -176,7 +176,7 @@ module processor_top(
         .R1_data(R1_data),
         .R2_data(R2_data),
         .G_data(G_data),
-        .immediate(immediate),
+        .immediate({8'd0, immediate}),
         .memory_data(memory_data),
         .bus_sel(bus_sel),
         .bus_out(bus)
