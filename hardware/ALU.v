@@ -65,7 +65,7 @@ module ALU(
         end
     endtask
     
-    always @(*) begin 
+    always @(*) begin
         status = 5'd0;
         case (alu_ctl)
             `ADD: add(a, b, result, status[3:0]);

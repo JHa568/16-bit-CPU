@@ -212,6 +212,7 @@ module tb_integration;
     initial begin
         $dumpfile("tb_integration.vcd");
         $dumpvars(0, tb_integration);
+        shared_bus
     end
 
 endmodule
