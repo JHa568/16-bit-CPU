@@ -2,20 +2,80 @@ module controller_fsm(
     input clk,
     input status_register, // ALU SR
     input [15:0] instruction,
-    output reg [12:0] control_plane
-    //  2 |  2 | 2  |  1 | 4  |  1  | 2 |
-    // r0 | r1 | r2 | A | ALU | SR | G |
-);
-    wire opcode = instruction[15:11]; 
-    // 4 bits 
+    
+    output [1:0] r0,
+    output [1:0] r1,
+    output [1:0] r2,
+    output [1:0] A,
+    output [3:0] ALU,  
+    output [4:0] SR,
+    output [1:0] G,
+
+    // JASON AND LUKE IMPLEMENT:
+    // Program counter
+    // Instruction 
+
+    // output [3:0] PC, // Program counter
+    // output reg instruction_end // next queue trigger for next instruction.
+    );  
+
+    `include "./tasks/operation_tasks.v"
+    `include "./tasks/controller_tasks.v";
+
+    localparam C_FETCH = 3'd0;   // Fetches instruction 
+    localparam C_DECODE = 3'd1;  // Decodes the instruction (opcode + params)
+    localparam C_LOAD = 3'd2;    // Loads to the accumulator or some other temporary storage to be computed by EXECUTE
+    localparam C_EXECUTE = 3'd3; // Executes basically computes values (anything that transforms one or more values to a single value)
+    localparam C_WRITE = 3'd4;   // Writes to a specific register
+
+    wire [3:0] opcode; 
+    wire [11:0] params; 
+    reg [2:0] controller_state;
+    reg [19:0] control_plane;
+
+    initial begin
+        controller_state = C_FETCH;
+        opcode = 4'd0; 
+        params = 12'd0;
+    end
 
     always @(posedge clk) begin
-        case (opcode)
-            `ADD: control_plane = 13'd0;
-            `SUB: control_plane = 13'd0;
-            `MOV: control_plane = 13'd0;
-            `LDI: control_plane = 13'd0;
-            default control_plane = 13'd0; // Should never hit!
+        control_plane = 20'd0;
+        case (controller_state);
+            `C_FETCH: begin
+                instruction_end = 1'b1;
+                controller_state <= `C_DECODE;
+            end
+            `C_DECODE begin
+                opcode <= instruction[15:12];
+                params <= instruction[11:0];
+                controller_state <= `C_LOAD;
+            end
+            `C_LOAD: begin
+                load_step(op_code, params, control_plane);
+                controller_state <= `C_EXECUTE;
+            end
+            `C_EXECUTE: begin
+                execute_step(op_code, params, control_plane);
+                controller_state <= `C_WRITE;
+            end
+            `C_WRITE: begin
+                writeback_step(op_code, params, control_plane);
+                controller_state <= `C_FETCH;
+            end
+            default: 
         endcase
     end
+    
+    // Assign the control plane the wires
+    // Registers at the top
+    assign r0 = control_plane[19:18]
+    assign r1 = control_plane[17:16]
+    assign r2 = control_plane[15:14]
+    assign A = control_plane[13:12]
+    assign G = control_plane[11:10]
+
+    // Other registers
+    assign SR = control_plane[9:4]
+    assign ALU = control_plane[3:0]
 endmodule

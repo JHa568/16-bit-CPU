@@ -3,7 +3,7 @@ module ALU(
     input [3:0] alu_ctl, 
     input [15:0] a, b,
     output reg [15:0] result,
-    output reg [4:0] status 
+    output reg [4:0] status
     // Status bits representations [ zero | negative | carry | overflow ]
 );
     // Addition Operation
