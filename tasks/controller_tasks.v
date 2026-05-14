@@ -34,7 +34,7 @@ task execute_step;
     input [11:0] params;
     output reg [23:0] control_plane;
     reg [3:0] Ry;
-    begin
+    begin // Some 
         control_plane = 24'd0;
         Ry = params[7:4];
         case(opcode)

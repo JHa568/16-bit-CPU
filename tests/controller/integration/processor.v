@@ -1,4 +1,8 @@
-module controller_alu;
+/*
+TOP LEVEL module test bench for testing
+*/
+
+module processor;
     reg clk;
     reg status_register;
 
@@ -10,26 +14,28 @@ module controller_alu;
     wire [15:0] imm_bus;
     wire [15:0] alu_bus;
     wire [15:0] reg_bus;
+    wire [15:0] status_reg;
     wire [15:0] bus;
 
     integer pass = 0;
     integer fail = 0;
 
-    ALU_component alu (
+    ALU_component alu ( // Does arithmetic stuff (ONLY used by ADD and SUB)
         .clk(clk),
         .rst(1'b0),
         .alu_ctl(ALU),
         .control_plane({A, G}),
         .input_bus(bus),
-        .output_bus(alu_bus)
+        .output_bus(alu_bus),
+        .status_bus(status_reg)
     );
     
-    controller_fsm dut (
-        .clk(clk),
-        .status_register(status_register),
-        .instruction(instruction),
-        .curr_comm_bus(bus),
-        .r0(r0), .r1(r1), .r2(r2),
+    controller_fsm dut ( // Acts as a conductors and tells what each component should do
+        .clk(clk), 
+        .status_register(status_register), // NOT BEING USED!!!
+        .instruction(instruction), // Instructions are read by the controller fsm via the FETCH step
+        .curr_comm_bus(bus), // 
+        .r0(r0), .r1(r1), .r2(r2), // 
         .A(A),
         .ALU(ALU),
         .SR(SR),
@@ -77,8 +83,8 @@ module controller_alu;
     endtask
 
     initial begin
-        $dumpfile("alu.vcd");
-        $dumpvars(0, controller_alu);
+        $dumpfile("processor.vcd");
+        $dumpvars(0, processor);
         $display("\n╔══════════════════════════════════════════════╗");
         $display("║              ALU Integration Suite          ║");
         $display("╚══════════════════════════════════════════════╝");

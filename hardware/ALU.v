@@ -3,14 +3,14 @@ module ALU(
     input [3:0] alu_ctl, 
     input [15:0] a, b,
     output reg [15:0] result,
-    output reg [4:0] status
+    output reg [15:0] status
     // Status bits representations [ zero | negative | carry | overflow ]
 );
     // Addition Operation
     task add;
         input [15:0] a, b;
         output [15:0] result;
-        output reg [3:0] status;
+        output reg [15:0] status;
         reg [16:0] tmp;
         reg zero, negative, carry, overflow;
         begin
@@ -39,7 +39,7 @@ module ALU(
     task sub;
         input [15:0] a, b;
         output reg [15:0] result;
-        output reg [3:0] status;
+        output reg [15:0] status;
         reg [16:0] tmp;
         reg zero, negative, carry, underflow;
         begin
@@ -66,10 +66,10 @@ module ALU(
     endtask
     
     always @(*) begin
-        status = 5'd0;
+        status = 16'd0;
         case (alu_ctl)
-            `ADD: add(a, b, result, status[3:0]);
-            `SUB: sub(a, b, result, status[3:0]);
+            `ADD: add(a, b, result, status);
+            `SUB: sub(a, b, result, status);
             default: 
                 begin 
                     result = 16'hDEAD; // Should never hit
