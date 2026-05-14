@@ -19,27 +19,21 @@ module ALU (
             ALU_ADD: begin
                 Y = A + B;
             end
-
             ALU_SUB: begin
                 Y = A - B;
             end
-
             ALU_AND: begin
                 Y = A & B;
             end
-
             ALU_OR: begin
                 Y = A | B;
             end
-
             ALU_XOR: begin
                 Y = A ^ B;
             end
-
             ALU_INC: begin
                 Y = A + 16'd1;
             end
-
             default: begin
                 Y = 16'd0;
             end
