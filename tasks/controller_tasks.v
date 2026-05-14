@@ -2,16 +2,16 @@
 `include "register_tasks.v"
 
 // LOAD tasks 
-task load_step;
+task load_step; 
     input [3:0] opcode;
     input [11:0] params;
     output reg [23:0] control_plane;
     reg [3:0] Rx;
-    begin
+    begin // 
         control_plane = 24'd0;
         Rx = params[11:8];
         case(opcode)
-            `ADD: begin
+            `ADD: begin 
                 $display("LOADING ADD!");
                 get_register(Rx, `OUTPUT, control_plane, control_plane);
                 get_register(`A,  `STORE,  control_plane, control_plane);
@@ -34,7 +34,7 @@ task execute_step;
     input [11:0] params;
     output reg [23:0] control_plane;
     reg [3:0] Ry;
-    begin // Some 
+    begin 
         control_plane = 24'd0;
         Ry = params[7:4];
         case(opcode)
@@ -50,6 +50,7 @@ task execute_step;
                 get_register(`G,  `STORE,  control_plane, control_plane);
                 control_plane[23:20] = `REGISTER;
             end
+            // Why no 
             default: begin end
         endcase
     end
@@ -86,11 +87,11 @@ task writeback_step;
                 get_register(Ry, `STORE,  control_plane, control_plane);
                 control_plane[23:20] = `REGISTER;
             end
-            `LDI: begin
+            `LDI: begin // 
                 $display("LDI Begin!!--------------");
                 get_register(Rx, `STORE, control_plane, control_plane);
                 control_plane[23:20] = `IMMEDIATE;
-                imm_bus = D; // TODO: May change because does not use all the space
+                imm_bus = D; 
                 $display("imm_bus: %h", D);
                 $display("LDI has been done!----------------");
             end
