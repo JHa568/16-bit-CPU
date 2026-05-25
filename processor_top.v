@@ -28,7 +28,6 @@ module processor_top(
     output     [15:0] R0_debug,
     output     [15:0] R1_debug,
     output     [15:0] R2_debug,
-    output     [15:0] R3_debug,
     output     [15:0] mem20_debug,
     output            zero_flag_debug,
     output     [15:0] bus_debug
@@ -53,7 +52,6 @@ module processor_top(
     // ---------------------------------------------------------
     wire [15:0] bus;
     wire [15:0] reg_out_data;
-    wire [15:0] A_data;
     wire [15:0] G_data;
     wire [15:0] alu_result;
     wire [15:0] memory_data;
@@ -156,43 +154,22 @@ module processor_top(
         .reg_out(reg_out_data),
         .R0_debug(R0_debug),
         .R1_debug(R1_debug),
-        .R2_debug(R2_debug),
-        .R3_debug(R3_debug)
+        .R2_debug(R2_debug)
     );
 
     // ---------------------------------------------------------
-    // A register
-    // Stores first ALU operand.
+    // ALU component
+    // Bundles A register + ALU + G register into one unit.
     // ---------------------------------------------------------
-    register_16 A_reg(
+    ALU_component alu_unit(
         .clk(clk),
         .rst(rst),
-        .en(A_en),
-        .D(bus),
-        .Q(A_data)
-    );
-
-    // ---------------------------------------------------------
-    // ALU
-    // Calculates A op bus.
-    // ---------------------------------------------------------
-    ALU alu(
-        .A(A_data),
-        .B(bus),
+        .bus_in(bus),
+        .A_en(A_en),
+        .G_en(G_en),
         .alu_ctl(alu_ctl),
-        .Y(alu_result)
-    );
-
-    // ---------------------------------------------------------
-    // G register
-    // Stores ALU result before writeback.
-    // ---------------------------------------------------------
-    register_16 G_reg(
-        .clk(clk),
-        .rst(rst),
-        .en(G_en),
-        .D(alu_result),
-        .Q(G_data)
+        .alu_result(alu_result),
+        .G_data(G_data)
     );
 
     // ---------------------------------------------------------

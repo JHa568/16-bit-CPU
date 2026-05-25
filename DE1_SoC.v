@@ -13,9 +13,9 @@
 //              1: faster debug clock
 //
 // Display mapping:
-//   HEX0 = R1 low nibble
-//   HEX1 = R2 low nibble
-//   HEX2 = R3 low nibble
+//   HEX0 = R0 low nibble
+//   HEX1 = R1 low nibble
+//   HEX2 = R2 low nibble
 //   HEX3 = PC low nibble
 //   HEX4 = current opcode
 //   HEX5 = controller state
@@ -80,7 +80,6 @@ module DE1_SoC(
     wire [15:0] R0_debug;
     wire [15:0] R1_debug;
     wire [15:0] R2_debug;
-    wire [15:0] R3_debug;
     wire [15:0] mem20_debug;
     wire zero_flag_debug;
     wire [15:0] bus_debug;
@@ -95,7 +94,6 @@ module DE1_SoC(
         .R0_debug(R0_debug),
         .R1_debug(R1_debug),
         .R2_debug(R2_debug),
-        .R3_debug(R3_debug),
         .mem20_debug(mem20_debug),
         .zero_flag_debug(zero_flag_debug),
         .bus_debug(bus_debug)
@@ -107,9 +105,9 @@ module DE1_SoC(
     assign LEDR[9]   = cpu_clk;
 
     // Seven-segment displays.
-    hex_decoder h0(.hex(R1_debug[3:0]),       .seg(HEX0));
-    hex_decoder h1(.hex(R2_debug[3:0]),       .seg(HEX1));
-    hex_decoder h2(.hex(R3_debug[3:0]),       .seg(HEX2));
+    hex_decoder h0(.hex(R0_debug[3:0]),       .seg(HEX0));
+    hex_decoder h1(.hex(R1_debug[3:0]),       .seg(HEX1));
+    hex_decoder h2(.hex(R2_debug[3:0]),       .seg(HEX2));
     hex_decoder h3(.hex(pc_debug[3:0]),       .seg(HEX3));
     hex_decoder h4(.hex(instruction_debug[15:12]), .seg(HEX4));
     hex_decoder h5(.hex(state_debug),         .seg(HEX5));

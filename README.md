@@ -11,9 +11,8 @@ The CPU uses:
 - Instruction Register (`instruction_register.v`)
 - Controller FSM with packed control plane (`controller_fsm.v` + `controller_tasks.v`)
 - Shared bus multiplexer (`bus_mux.v`)
-- Register file with R0-R3 (`register_file.v`)
-- A and G registers (`register_16.v`)
-- ALU with ADD, SUB, AND, OR, XOR, INC (`ALU.v`)
+- Register file with R0-R2 (`register_file.v`)
+- ALU component with A register, ALU, and G register (`ALU_component.v`)
 - Data memory (`data_memory.v`)
 - Status register with zero flag (`status_register.v`)
 - FPGA wrapper for DE1-SoC (`fpga_top.v`)
@@ -51,9 +50,9 @@ HALT                stop processor
 
 ```bash
 iverilog -o final_cpu.vvp \
-constants.v ALU.v register_16.v register_file.v bus_mux.v pc.v \
-instruction_memory.v instruction_register.v data_memory.v status_register.v \
-controller_fsm.v processor_top.v processor_TB.v
+constants.v ALU.v register_16.v ALU_component.v register_file.v bus_mux.v \
+pc.v instruction_memory.v instruction_register.v data_memory.v \
+status_register.v controller_fsm.v processor_top.v processor_TB.v
 
 vvp final_cpu.vvp
 
@@ -65,8 +64,7 @@ gtkwave final_cpu.vcd
 ```text
 R0 = 0
 R1 = 7
-R2 = 7
-R3 = 9
+R2 = 9
 MEM[20] = 7
 zero_flag = 1
 halted = 1
@@ -85,9 +83,9 @@ Board: DE1-SoC / Cyclone V 5CSEMA5F31C6.
 Display mapping:
 
 ```text
-HEX0 = R1 low nibble
-HEX1 = R2 low nibble
-HEX2 = R3 low nibble
+HEX0 = R0 low nibble
+HEX1 = R1 low nibble
+HEX2 = R2 low nibble
 HEX3 = PC low nibble
 HEX4 = current opcode
 HEX5 = controller state

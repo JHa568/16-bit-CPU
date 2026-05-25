@@ -22,7 +22,6 @@ module processor_TB;
     wire [15:0] R0_debug;
     wire [15:0] R1_debug;
     wire [15:0] R2_debug;
-    wire [15:0] R3_debug;
     wire [15:0] mem20_debug;
     wire zero_flag_debug;
     wire [15:0] bus_debug;
@@ -37,7 +36,6 @@ module processor_TB;
         .R0_debug(R0_debug),
         .R1_debug(R1_debug),
         .R2_debug(R2_debug),
-        .R3_debug(R3_debug),
         .mem20_debug(mem20_debug),
         .zero_flag_debug(zero_flag_debug),
         .bus_debug(bus_debug)
@@ -62,7 +60,6 @@ module processor_TB;
         $display("Final R0 = %h", R0_debug);
         $display("Final R1 = %h", R1_debug);
         $display("Final R2 = %h", R2_debug);
-        $display("Final R3 = %h", R3_debug);
         $display("Final MEM[20] = %h", mem20_debug);
         $display("Final zero_flag = %b", zero_flag_debug);
         $display("Final PC = %h", pc_debug);
@@ -70,8 +67,7 @@ module processor_TB;
 
         if (R0_debug == 16'd0 &&
             R1_debug == 16'd7 &&
-            R2_debug == 16'd7 &&
-            R3_debug == 16'd9 &&
+            R2_debug == 16'd9 &&
             mem20_debug == 16'd7 &&
             zero_flag_debug == 1'b1 &&
             halted_debug == 1'b1) begin

@@ -32,7 +32,6 @@
 `define REG_R0    2'b00
 `define REG_R1    2'b01
 `define REG_R2    2'b10
-`define REG_R3    2'b11
 
 // -------------------------------------------------------------
 // Bus source codes

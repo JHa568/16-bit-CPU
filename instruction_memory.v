@@ -34,8 +34,7 @@ module instruction_memory(
         // Expected final values:
         //   R0 = 0
         //   R1 = 7
-        //   R2 = 7
-        //   R3 = 9
+        //   R2 = 9
         //   data_memory[20] = 7
         //   zero_flag = 1
         // ----------------------------------------------------- 
@@ -54,10 +53,10 @@ module instruction_memory(
         memory[11] = {`OP_SUB,   `REG_R0, `REG_R0, 8'd0};   // R0 = R0 - R0 = 0, zero_flag=1
         memory[12] = {`OP_BEQ,   `REG_R0, `REG_R0, 8'd14};  // If zero, jump to 14
         memory[13] = {`OP_LDI,   `REG_R2, `REG_R0, 8'd255}; // Skipped if BEQ works
-        memory[14] = {`OP_LDI,   `REG_R3, `REG_R0, 8'd9};   // R3 = 9
+        memory[14] = {`OP_LDI,   `REG_R2, `REG_R0, 8'd9};   // R2 = 9
         memory[15] = {`OP_JMP,   `REG_R0, `REG_R0, 8'd17};  // Jump to HALT
         memory[16] = {`OP_LDI,   `REG_R1, `REG_R0, 8'd255}; // Skipped if JMP works
-		  memory[17] = {`OP_HALT,  12'd0};                    // Stop
+		memory[17] = {`OP_HALT,  12'd0};                    // Stop
     end
 
     assign instruction = memory[address];
