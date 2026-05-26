@@ -24,6 +24,7 @@
 `define OP_BEQ    4'hB   // Branch if zero:      if zero_flag PC = imm
 `define OP_PUSH   4'hC   // Push: MEM[SP] = Rx, SP--
 `define OP_POP    4'hD   // Pop:  SP++, Rx = MEM[SP]
+`define OP_SIMD      4'hE   // Parallel instruction for ALU: SIMD <alu_ctl> <result_reg> <Rx> <Ry> 
 `define OP_HALT   4'hF   // Stop processor
 
 // -------------------------------------------------------------

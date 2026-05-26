@@ -133,12 +133,19 @@ endtask
 
 task simple_instruction_step;
     input [3:0] opcode;
-    input [1:0] rx;
-    input [1:0] ry;
+    input [11:0] params;
     input zero_flag;
     output reg [31:0] cp;
+    
+    // Rx and Ry
+    reg [1:0] rx;
+    reg [1:0] ry;
     begin
         cp = 32'd0;
+        
+        rx = params[11:10];
+        ry = params[9:8];
+
         case (opcode)
             `OP_LDI: begin
                 set_bus(`BUS_IMM, cp, cp);

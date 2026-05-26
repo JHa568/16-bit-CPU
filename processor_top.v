@@ -110,9 +110,7 @@ module processor_top(
     controller_fsm controller(
         .clk(clk),
         .rst(rst),
-        .opcode(opcode),
-        .rx(rx),
-        .ry(ry),
+        .instruction(instruction),
         .zero_flag(zero_flag),
         .control_plane(control_plane),
         .bus_sel(bus_sel),
