@@ -5,7 +5,10 @@ module stack_pointer(
     input       sp_push,
     input       sp_pop,
     input       use_sp_addr,
-    input [7:0] imm8
+    input [7:0] imm8,
+    output[7:0] dmem_addr,
+    output[7:0] sp_debug
+    
 );
     // ---------------------------------------------------------
     // Stack Pointer
@@ -14,7 +17,6 @@ module stack_pointer(
     // POP:  SP++, then read from mem[SP]
     // ---------------------------------------------------------
     reg [7:0] SP;
-    wire [7:0] dmem_addr; 
 
     always @(posedge clk or posedge rst) begin
         if (rst)
@@ -27,5 +29,6 @@ module stack_pointer(
 
     // Address mux: SP for stack operations, immediate for LOAD/STORE
     assign dmem_addr = use_sp_addr ? SP : imm8;
-
+    assign sp_debug = SP;
+    
 endmodule

@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-
+`include "constants.v"
 // =============================================================
 // instruction_memory.v  —  PUSH / POP testbench program
 // -------------------------------------------------------------
@@ -39,8 +39,31 @@ initial begin
     memory[10] = 16'b1101_01_00_00000000; // POP R1  R1=20, SP=FE
     memory[11] = 16'b1101_10_00_00000000; // POP R2  R2=10, SP=FF
 
+    // // ---- SIMD Phase ----
+    memory[0]  = 16'b0000_00_00_00001010; // LDI R0, 10
+    memory[1]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
+    memory[2]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
+    memory[3]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
+    memory[4]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
+
+    memory[5]  = 16'b0000_01_00_00010100; // LDI R1, 20
+    memory[6]  = {`OP_OR, `REG_R0, `REG_R1, 8'd0}; // OR R0, R1
+
+
+    memory[7]  = 16'b0000_01_00_00011110; // LDI R1, 30
+    memory[8]  = {`OP_ADD, `REG_R1, `REG_R1, 8'd0}; // ADD R1, R1
+    memory[9]  = {`OP_ADD, `REG_R1, `REG_R1, 8'd0}; // ADD R1, R1
+    memory[10]  = {`OP_ADD, `REG_R1, `REG_R1, 8'd0}; // ADD R1, R1
+    memory[11]  = {`OP_ADD, `REG_R1, `REG_R1, 8'd0}; // ADD R1, R1
+
+    memory[12]  = 16'b0000_10_00_00010100; // LDI R2, 20
+    memory[13]  = {`OP_OR, `REG_R1, `REG_R2, 8'd0}; // OR R1, R2
+
+    memory[14] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R1, 1'b0}; // SIMD ALU_ADD R2 R1 R0
+    memory[27] = {`OP_SIMD, `ALU_SUB, `M_SIMD_2X8, `REG_R0, `REG_R1, 1'b0}; // SIMD ALU_ADD R2 R1 R0
+
     // ---- Stop ----
-    memory[12] = 16'b1111_00_00_00000000; // HALT
+    memory[15] = 16'b1111_00_00_00000000; // HALT
 end
 
 assign instruction = memory[address];

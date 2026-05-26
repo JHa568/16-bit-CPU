@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-`include "constants.v"
+
 
 module controller_fsm(
     input             clk,
@@ -34,7 +34,7 @@ module controller_fsm(
 
     output reg [3:0]  state_debug
 );
-
+    `include "constants.v"
     `include "controller_tasks.v"
 
     // Controller states

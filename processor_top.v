@@ -25,9 +25,6 @@ module processor_top(
     wire [15:0] instruction;
 
     // individual instructions
-    wire [3:0] opcode = instruction[15:12];
-    wire [1:0] rx     = instruction[11:10];
-    wire [1:0] ry     = instruction[9:8];
     wire [7:0] imm8   = instruction[7:0];
     wire [15:0] imm16 = {8'd0, imm8};
 
@@ -39,6 +36,11 @@ module processor_top(
     wire [15:0] G_data;
     wire [15:0] alu_result;
     wire [15:0] memory_data;
+
+    // ---------------------------------------------------------
+    // Stack pointers
+    // ---------------------------------------------------------
+    wire [7:0]  SP;
 
     // ---------------------------------------------------------
     // Controller control signals
@@ -57,20 +59,25 @@ module processor_top(
     wire        pc_load;
     wire        ir_en;
     wire        mem_write;
+    wire [1:0]  mode;
     wire        halted;
     wire        zero_flag;
     wire [3:0]  controller_state;
+    wire [7:0]  dmem_addr;
+    
 
     // ---------------------------------------------------------
     // Stack Pointer
     // ---------------------------------------------------------
-    sp stack_pointer(
+    stack_pointer sp_unit(
         .clk(clk),
         .rst(rst),
         .sp_push(sp_push),
         .sp_pop(sp_pop),
         .use_sp_addr(use_sp_addr),
-        .imm8(imm8)
+        .imm8(imm8),
+        .dmem_addr(dmem_addr),
+        .sp_debug(SP)
     );
 
     // ---------------------------------------------------------
@@ -120,6 +127,7 @@ module processor_top(
         .reg_in_en(reg_in_en),
         .A_en(A_en),
         .G_en(G_en),
+        .mode(mode),
         .alu_ctl(alu_ctl),
         .status_en(status_en),
         .pc_en(pc_en),
@@ -158,6 +166,7 @@ module processor_top(
         .bus_in(bus),
         .A_en(A_en),
         .G_en(G_en),
+        .mode(mode),
         .alu_ctl(alu_ctl),
         .alu_result(alu_result),
         .G_data(G_data)

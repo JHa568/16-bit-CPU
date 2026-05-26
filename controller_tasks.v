@@ -28,17 +28,11 @@
 //   [7:0]   unused        Reserved
 // =============================================================
 
-task clear_control;
-    output reg [31:0] cp;
-    begin
-        cp = 32'd0;
-    end
-endtask
-
 task set_bus;
     input [3:0] source;
     input [31:0] curr;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = curr;
         cp[31:28] = source;
@@ -48,7 +42,8 @@ endtask
 task read_register;
     input [1:0] reg_id;
     input [31:0] curr;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = curr;
         cp[27:26] = reg_id;
@@ -59,7 +54,8 @@ endtask
 task write_register;
     input [1:0] reg_id;
     input [31:0] curr;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = curr;
         cp[24:23] = reg_id;
@@ -67,75 +63,33 @@ task write_register;
     end
 endtask
 
+// FETCH Stage
 task fetch_step;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = 32'd0;
         cp[13] = 1'b1; // ir_en
     end
 endtask
 
+// PC inc Stage
 task pc_increment_step;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = 32'd0;
         cp[15] = 1'b1; // pc_en
     end
 endtask
 
-task load_step;
-    input [1:0] rx;
-    output reg [31:0] cp;
-    begin
-        cp = 32'd0;
-        read_register(rx, cp, cp);
-        set_bus(`BUS_REG, cp, cp);
-        cp[21] = 1'b1; // A_en
-    end
-endtask
-
-task execute_step;
-    input [3:0] opcode;
-    input [1:0] ry;
-    output reg [31:0] cp;
-    begin
-        cp = 32'd0;
-        if (opcode == `OP_INC) begin
-            set_bus(`BUS_ZERO, cp, cp);
-        end
-        else begin
-            read_register(ry, cp, cp);
-            set_bus(`BUS_REG, cp, cp);
-        end
-        case (opcode)
-            `OP_ADD: cp[19:17] = `ALU_ADD;
-            `OP_SUB: cp[19:17] = `ALU_SUB;
-            `OP_AND: cp[19:17] = `ALU_AND;
-            `OP_OR:  cp[19:17] = `ALU_OR;
-            `OP_XOR: cp[19:17] = `ALU_XOR;
-            `OP_INC: cp[19:17] = `ALU_INC;
-            default: cp[19:17] = `ALU_ADD;
-        endcase
-        cp[20] = 1'b1; // G_en
-        cp[16] = 1'b1; // status_en
-    end
-endtask
-
-task writeback_step;
-    input [1:0] rx;
-    output reg [31:0] cp;
-    begin
-        cp = 32'd0;
-        set_bus(`BUS_G, cp, cp);
-        write_register(rx, cp, cp);
-    end
-endtask
-
+// DECODE Stage
 task simple_instruction_step;
     input [3:0] opcode;
     input [11:0] params;
     input zero_flag;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     
     // Rx and Ry
     reg [1:0] rx;
@@ -179,12 +133,114 @@ task simple_instruction_step;
     end
 endtask
 
+// LOAD Stage - Mainly for ALU execution
+task load_step;
+    input [3:0] opcode;
+    input [11:0] params; // Retrieve Rx
+    output [31:0] cp;
+    reg    [31:0] cp;
+    begin
+        case (opcode)
+            `OP_SIMD: begin 
+                cp = 32'd0;
+                read_register(params[7:6], cp, cp);
+                set_bus(`BUS_REG, cp, cp);
+                cp[21] = 1'b1; // A_en
+            end
+            default: begin
+                cp = 32'd0;
+                read_register(params[11:10], cp, cp);
+                set_bus(`BUS_REG, cp, cp);
+                cp[21] = 1'b1; // A_en
+            end
+        endcase
+    end
+endtask
+
+// EXECUTE Stage
+task execute_step;
+    input      [3:0]  opcode;
+    input      [11:0] params; // Retrieve Ry
+    output     [31:0] cp;
+    reg        [2:0]  alu_ctl;
+    reg        [1:0]  mode;
+    reg        [1:0]  ry;
+    reg        [31:0] cp;
+    begin
+        cp = 32'd0;
+    
+        alu_ctl = params[11:9];
+        mode = params[8:7];
+        
+        if (opcode == `OP_SIMD) begin // For parallel ALU instruction
+            ry = params[5:4];
+
+            read_register(ry, cp, cp);
+            set_bus(`BUS_REG, cp, cp);
+            
+            cp[7:6] = mode;
+
+            case (alu_ctl)
+                `ALU_ADD: cp[19:17] = `ALU_ADD;
+                `ALU_SUB: cp[19:17] = `ALU_SUB;
+                default:  cp[19:17] = `ALU_ADD;
+            endcase
+            
+        end else begin
+            ry = params[9:8];
+
+            if (opcode == `OP_INC) begin
+                set_bus(`BUS_ZERO, cp, cp);
+            end else begin
+                read_register(ry, cp, cp);
+                set_bus(`BUS_REG, cp, cp);
+            end
+ 
+            case (opcode)
+                `OP_ADD: cp[19:17] = `ALU_ADD;
+                `OP_SUB: cp[19:17] = `ALU_SUB;
+                `OP_AND: cp[19:17] = `ALU_AND;
+                `OP_OR:  cp[19:17] = `ALU_OR;
+                `OP_XOR: cp[19:17] = `ALU_XOR;
+                `OP_INC: cp[19:17] = `ALU_INC;
+                default: cp[19:17] = `ALU_ADD;
+            endcase
+        end
+        cp[20] = 1'b1; // G_en
+        cp[16] = 1'b1; // status_en
+    end
+endtask
+
+// WRITEBACK Stage
+task writeback_step;
+    input      [3:0]  opcode;
+    input      [11:0] params; // Retrieve rx
+    output     [31:0] cp;
+    reg    [31:0] cp;
+    begin
+        case (opcode)
+            `OP_SIMD: begin 
+                cp = 32'd0;
+                set_bus(`BUS_G, cp, cp);
+                write_register(params[7:6], cp, cp);
+            end
+            default: begin
+                cp = 32'd0;
+                set_bus(`BUS_G, cp, cp);
+                write_register(params[11:10], cp, cp);
+            end
+        endcase
+        
+    end
+endtask
+
 // -------------------------------------------------------------
 // PUSH step 1: Rx -> bus -> MEM[SP]
 // -------------------------------------------------------------
 task push_write_step;
-    input [1:0] rx;
-    output reg [31:0] cp;
+    input  [1:0] rx;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = 32'd0;
         read_register(rx, cp, cp);
@@ -198,7 +254,8 @@ endtask
 // PUSH step 2: SP--
 // -------------------------------------------------------------
 task push_dec_step;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = 32'd0;
         cp[10] = 1'b1;  // sp_push: SP = SP - 1
@@ -209,7 +266,8 @@ endtask
 // POP step 1: SP++
 // -------------------------------------------------------------
 task pop_inc_step;
-    output reg [31:0] cp;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = 32'd0;
         cp[9] = 1'b1;   // sp_pop: SP = SP + 1
@@ -220,8 +278,9 @@ endtask
 // POP step 2: MEM[SP] -> bus -> Rx
 // -------------------------------------------------------------
 task pop_read_step;
-    input [1:0] rx;
-    output reg [31:0] cp;
+    input  [1:0] rx;
+    output [31:0] cp;
+    reg    [31:0] cp;
     begin
         cp = 32'd0;
         set_bus(`BUS_MEM, cp, cp);
