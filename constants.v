@@ -5,8 +5,6 @@
 // constants.v
 // -------------------------------------------------------------
 // Central place for all instruction, register, bus and ALU codes.
-// Keeping these values in one file makes the CPU easier to explain
-// and prevents mismatches between modules.
 // =============================================================
 
 // -------------------------------------------------------------
@@ -24,10 +22,12 @@
 `define OP_STORE  4'h9   // Store data memory:   MEM[imm] = Rx
 `define OP_JMP    4'hA   // Unconditional jump:  PC = imm
 `define OP_BEQ    4'hB   // Branch if zero:      if zero_flag PC = imm
+`define OP_PUSH   4'hC   // Push: MEM[SP] = Rx, SP--
+`define OP_POP    4'hD   // Pop:  SP++, Rx = MEM[SP]
 `define OP_HALT   4'hF   // Stop processor
 
 // -------------------------------------------------------------
-// Register IDs: instruction[11:10] = Rx, instruction[9:8] = Ry
+// Register IDs
 // -------------------------------------------------------------
 `define REG_R0    2'b00
 `define REG_R1    2'b01
@@ -35,7 +35,6 @@
 
 // -------------------------------------------------------------
 // Bus source codes
-// These control the shared bus multiplexer.
 // -------------------------------------------------------------
 `define BUS_ZERO   4'h0   // Put 0 on the bus
 `define BUS_REG    4'h1   // Put selected register output on the bus

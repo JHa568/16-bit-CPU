@@ -1,37 +1,17 @@
 `timescale 1ns / 1ps
 `include "constants.v"
 
-// =============================================================
-// controller_fsm.v
-// -------------------------------------------------------------
-// Multi-cycle CPU controller using a packed control-plane style.
-//
-// This module is the brain of the processor. It does not store data
-// or perform arithmetic directly. Instead, it generates control
-// signals that tell the datapath what to do each clock cycle.
-//
-// Main stages:
-//   FETCH     : PC selects instruction memory and IR loads instruction.
-//   PC_INC    : PC increments AFTER the IR has latched safely.
-//   DECODE    : Controller looks at the opcode and decides what path.
-//   LOAD_A    : For ALU instructions, Rx is loaded into A.
-//   EXEC_ALU  : Ry goes to bus, ALU result is stored in G.
-//   WRITEBACK : G goes to bus, result is written back into Rx.
-//   HALTED    : Processor stops after HALT instruction.
-// =============================================================
-
 module controller_fsm(
     input             clk,
     input             rst,
 
-    input      [3:0]  opcode,     // instruction[15:12]
-    input      [1:0]  rx,         // instruction[11:10]
-    input      [1:0]  ry,         // instruction[9:8]
-    input             zero_flag,  // from status register
+    input      [3:0]  opcode,
+    input      [1:0]  rx,
+    input      [1:0]  ry,
+    input             zero_flag,
 
     output reg [31:0] control_plane,
 
-    // Unpacked control signals used by the datapath
     output reg [3:0]  bus_sel,
     output reg [1:0]  reg_out_sel,
     output reg        reg_out_en,
@@ -46,51 +26,49 @@ module controller_fsm(
     output reg        ir_en,
     output reg        mem_write,
     output reg        halted,
+
+    // Stack pointer control signals
+    output reg        sp_push,
+    output reg        sp_pop,
+    output reg        use_sp_addr,
+
     output reg [3:0]  state_debug
 );
 
-    // Helper tasks are included INSIDE the module because Verilog tasks
-    // must be declared within a module. Do not compile controller_tasks.v
-    // as a separate source file; it is pulled in here automatically.
     `include "controller_tasks.v"
 
     // Controller states
-    localparam S_FETCH     = 4'd0;  // latch instruction at current PC into IR
-    localparam S_PC_INC    = 4'd1;  // increment PC after IR has latched
-    localparam S_DECODE    = 4'd2;  // decode/handle current IR instruction
-    localparam S_LOAD_A    = 4'd3;  // load Rx into A for ALU instructions
-    localparam S_EXEC_ALU  = 4'd4;  // execute ALU operation and store result in G
-    localparam S_WRITEBACK = 4'd5;  // write G result back into Rx
-    localparam S_HALTED    = 4'd6;  // stop processor
+    localparam S_FETCH      = 4'd0;
+    localparam S_PC_INC     = 4'd1;
+    localparam S_DECODE     = 4'd2;
+    localparam S_LOAD_A     = 4'd3;
+    localparam S_EXEC_ALU   = 4'd4;
+    localparam S_WRITEBACK  = 4'd5;
+    localparam S_HALTED     = 4'd6;
+    localparam S_PUSH_WRITE = 4'd7;   // write Rx to MEM[SP]
+    localparam S_PUSH_DEC   = 4'd8;   // decrement SP
+    localparam S_POP_INC    = 4'd9;   // increment SP
+    localparam S_POP_READ   = 4'd10;  // read MEM[SP] into Rx
 
     reg [3:0] state;
     reg [3:0] next_state;
 
-    // ---------------------------------------------------------
     // State register
-    // ---------------------------------------------------------
     always @(posedge clk or posedge rst) begin
-        if (rst) begin
+        if (rst)
             state <= S_FETCH;
-        end
-        else begin
+        else
             state <= next_state;
-        end
     end
 
-    // ---------------------------------------------------------
     // Next-state logic
-    // ---------------------------------------------------------
     always @(*) begin
         case (state)
             S_FETCH: begin
-                // First latch instruction_memory[PC] into the IR.
-                // Do NOT increment PC in this same state, otherwise the IR/PC timing is ambiguous.
                 next_state = S_PC_INC;
             end
 
             S_PC_INC: begin
-                // Now that the IR safely holds the current instruction, move PC to the next address.
                 next_state = S_DECODE;
             end
 
@@ -99,84 +77,53 @@ module controller_fsm(
                     `OP_ADD, `OP_SUB, `OP_AND, `OP_OR, `OP_XOR, `OP_INC: begin
                         next_state = S_LOAD_A;
                     end
-                    `OP_HALT: begin
-                        next_state = S_HALTED;
-                    end
-                    default: begin
-                        // LDI, MOV, LOAD, STORE, JMP, BEQ complete in DECODE.
-                        next_state = S_FETCH;
-                    end
+                    `OP_PUSH: next_state = S_PUSH_WRITE;
+                    `OP_POP:  next_state = S_POP_INC;
+                    `OP_HALT: next_state = S_HALTED;
+                    default:  next_state = S_FETCH; // LDI, MOV, LOAD, STORE, JMP, BEQ
                 endcase
             end
 
-            S_LOAD_A: begin
-                next_state = S_EXEC_ALU;
-            end
+            S_LOAD_A:     next_state = S_EXEC_ALU;
+            S_EXEC_ALU:   next_state = S_WRITEBACK;
+            S_WRITEBACK:  next_state = S_FETCH;
+            S_HALTED:     next_state = S_HALTED;
 
-            S_EXEC_ALU: begin
-                next_state = S_WRITEBACK;
-            end
+            S_PUSH_WRITE: next_state = S_PUSH_DEC;
+            S_PUSH_DEC:   next_state = S_FETCH;
+            S_POP_INC:    next_state = S_POP_READ;
+            S_POP_READ:   next_state = S_FETCH;
 
-            S_WRITEBACK: begin
-                next_state = S_FETCH;
-            end
-
-            S_HALTED: begin
-                next_state = S_HALTED;
-            end
-
-            default: begin
-                next_state = S_FETCH;
-            end
+            default: next_state = S_FETCH;
         endcase
     end
 
-    // ---------------------------------------------------------
     // Output/control logic
-    // The controller generates one packed control word, then unpacks
-    // it into named signals for the datapath.
-    // ---------------------------------------------------------
     always @(*) begin
         control_plane = 32'd0;
 
         case (state)
-            S_FETCH: begin
-                // Latch the instruction at the current PC into the instruction register.
-                fetch_step(control_plane);
-            end
+            S_FETCH:      fetch_step(control_plane);
+            S_PC_INC:     pc_increment_step(control_plane);
+            S_DECODE:     simple_instruction_step(opcode, rx, ry, zero_flag, control_plane);
+            S_LOAD_A:     load_step(rx, control_plane);
+            S_EXEC_ALU:   execute_step(opcode, ry, control_plane);
+            S_WRITEBACK:  writeback_step(rx, control_plane);
 
-            S_PC_INC: begin
-                // Increment PC one cycle later, after IR has already captured the instruction.
-                pc_increment_step(control_plane);
-            end
-
-            S_DECODE: begin
-                simple_instruction_step(opcode, rx, ry, zero_flag, control_plane);
-            end
-
-            S_LOAD_A: begin
-                load_step(rx, control_plane);
-            end
-
-            S_EXEC_ALU: begin
-                execute_step(opcode, ry, control_plane);
-            end
-
-            S_WRITEBACK: begin
-                writeback_step(rx, control_plane);
-            end
+            S_PUSH_WRITE: push_write_step(rx, control_plane);
+            S_PUSH_DEC:   push_dec_step(control_plane);
+            S_POP_INC:    pop_inc_step(control_plane);
+            S_POP_READ:   pop_read_step(rx, control_plane);
 
             S_HALTED: begin
                 control_plane = 32'd0;
-                control_plane[11] = 1'b1;
+                control_plane[11] = 1'b1; // halted
             end
 
-            default: begin
-                control_plane = 32'd0;
-            end
+            default: control_plane = 32'd0;
         endcase
 
-        // Unpack the control plane.
+        // Unpack control plane into named signals
         bus_sel     = control_plane[31:28];
         reg_out_sel = control_plane[27:26];
         reg_out_en  = control_plane[25];
@@ -191,6 +138,9 @@ module controller_fsm(
         ir_en       = control_plane[13];
         mem_write   = control_plane[12];
         halted      = control_plane[11];
+        sp_push     = control_plane[10];
+        sp_pop      = control_plane[9];
+        use_sp_addr = control_plane[8];
         state_debug = state;
     end
 

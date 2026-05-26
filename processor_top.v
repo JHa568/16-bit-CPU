@@ -1,26 +1,9 @@
 `timescale 1ns / 1ps
 `include "constants.v"
 
-// =============================================================
-// processor_top.v
-// -------------------------------------------------------------
-// Complete extension CPU.
-//
-// This module connects:
-//   PC -> instruction memory -> instruction register -> controller
-//   controller -> datapath control plane
-//   register file -> shared bus -> A/ALU/G -> shared bus
-//   data memory for LOAD/STORE
-//   status register for BEQ
-//
-// This top module is synthesizable and suitable for both simulation
-// and FPGA use through fpga_top.v.
-// =============================================================
-
 module processor_top(
     input             clk,
     input             rst,
-
     output            halted_debug,
     output     [3:0]  state_debug,
     output     [7:0]  pc_debug,
@@ -30,7 +13,8 @@ module processor_top(
     output     [15:0] R2_debug,
     output     [15:0] mem20_debug,
     output            zero_flag_debug,
-    output     [15:0] bus_debug
+    output     [15:0] bus_debug,
+    output     [7:0]  sp_debug       // stack pointer for debug/FPGA
 );
 
     // ---------------------------------------------------------
@@ -40,11 +24,11 @@ module processor_top(
     wire [15:0] instruction_from_memory;
     wire [15:0] instruction;
 
-    // Decoded instruction fields
+    // individual instructions
     wire [3:0] opcode = instruction[15:12];
     wire [1:0] rx     = instruction[11:10];
     wire [1:0] ry     = instruction[9:8];
-    wire [7:0] imm8   = instruction[7:0]; // bottom 8 bits
+    wire [7:0] imm8   = instruction[7:0];
     wire [15:0] imm16 = {8'd0, imm8};
 
     // ---------------------------------------------------------
@@ -78,8 +62,19 @@ module processor_top(
     wire [3:0]  controller_state;
 
     // ---------------------------------------------------------
+    // Stack Pointer
+    // ---------------------------------------------------------
+    sp stack_pointer(
+        .clk(clk),
+        .rst(rst),
+        .sp_push(sp_push),
+        .sp_pop(sp_pop),
+        .use_sp_addr(use_sp_addr),
+        .imm8(imm8)
+    );
+
+    // ---------------------------------------------------------
     // Program Counter
-    // pc_in uses the 8-bit immediate/address field for JMP/BEQ.
     // ---------------------------------------------------------
     pc pc_unit(
         .clk(clk),
@@ -92,7 +87,6 @@ module processor_top(
 
     // ---------------------------------------------------------
     // Instruction memory
-    // PC selects which instruction is fetched.
     // ---------------------------------------------------------
     instruction_memory imem(
         .address(pc_out),
@@ -101,7 +95,6 @@ module processor_top(
 
     // ---------------------------------------------------------
     // Instruction register
-    // Stores the current instruction while it executes.
     // ---------------------------------------------------------
     instruction_register ir(
         .clk(clk),
@@ -113,7 +106,6 @@ module processor_top(
 
     // ---------------------------------------------------------
     // Controller FSM
-    // Generates packed control_plane and unpacked datapath signals.
     // ---------------------------------------------------------
     controller_fsm controller(
         .clk(clk),
@@ -137,12 +129,14 @@ module processor_top(
         .ir_en(ir_en),
         .mem_write(mem_write),
         .halted(halted),
+        .sp_push(sp_push),
+        .sp_pop(sp_pop),
+        .use_sp_addr(use_sp_addr),
         .state_debug(controller_state)
     );
 
     // ---------------------------------------------------------
     // Register file
-    // Holds R0, R1, R2, R3.
     // ---------------------------------------------------------
     register_file regs(
         .clk(clk),
@@ -159,7 +153,6 @@ module processor_top(
 
     // ---------------------------------------------------------
     // ALU component
-    // Bundles A register + ALU + G register into one unit.
     // ---------------------------------------------------------
     ALU_component alu_unit(
         .clk(clk),
@@ -174,15 +167,12 @@ module processor_top(
 
     // ---------------------------------------------------------
     // Data memory
-    // Address comes from immediate field for simple teaching CPU.
-    // STORE writes bus value to memory.
-    // LOAD reads memory value into bus through bus_mux.
     // ---------------------------------------------------------
     data_memory dmem(
         .clk(clk),
         .rst(rst),
         .mem_write(mem_write),
-        .address(imm8),
+        .address(dmem_addr),
         .write_data(bus),
         .read_data(memory_data),
         .mem20_debug(mem20_debug)
@@ -190,7 +180,6 @@ module processor_top(
 
     // ---------------------------------------------------------
     // Status register
-    // Stores zero flag from ALU result.
     // ---------------------------------------------------------
     status_register status(
         .clk(clk),
@@ -202,7 +191,6 @@ module processor_top(
 
     // ---------------------------------------------------------
     // Shared bus mux
-    // Chooses which source appears on CPU bus.
     // ---------------------------------------------------------
     bus_mux shared_bus(
         .reg_data(reg_out_en ? reg_out_data : 16'd0),
@@ -222,5 +210,6 @@ module processor_top(
     assign instruction_debug = instruction;
     assign zero_flag_debug   = zero_flag;
     assign bus_debug         = bus;
+    assign sp_debug          = SP;
 
 endmodule
