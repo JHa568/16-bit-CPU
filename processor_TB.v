@@ -306,10 +306,14 @@ module processor_TB;
         check(R1_debug, 16'd3840,
             "memory[11] ADD");
 
+        wait_for_instruction();
+        check(R1_debug, 16'd7680,
+            "memory[11] ADD");
+
         // ============================================
         // memory[12]
         // ============================================
-        repeat(2) wait_for_instruction();
+        wait_for_instruction();
         check(R2_debug, 16'd20,
             "memory[12] LDI");
 
@@ -317,7 +321,7 @@ module processor_TB;
         // memory[13]
         // ============================================
         wait_for_instruction();
-        check(R1_debug, 16'd3860,
+        check(R1_debug, 16'd7700,
             "memory[13] OR");
 
         // ============================================
@@ -326,7 +330,7 @@ module processor_TB;
         wait_for_instruction();
 
         // TODO: update once SIMD ADD verified
-        check(R0_debug, 16'd6440,
+        check(R0_debug, 16'd10280,
             "memory[14] SIMD ADD");
 
         // ============================================
@@ -335,7 +339,7 @@ module processor_TB;
         wait_for_instruction();
 
         // TODO: update once SIMD SUB verified
-        check(R0_debug, 16'hFB00,
+        check(R0_debug, 16'd2580,
             "memory[15] SIMD SUB");
 
         wait_for_instruction();  
@@ -349,6 +353,10 @@ module processor_TB;
 
         check(R0_debug, 16'h1200,
             "Build R0 = 0x1200");
+
+        wait_for_instruction();
+        check(R1_debug, 16'h34,
+            "Build R1 = 0x34");
 
         wait_for_instruction();
         check(R0_debug, 16'h1234,
@@ -367,6 +375,7 @@ module processor_TB;
         check(R2_debug, 16'h11,
             "memory[15] LDI 0x11");
 
+        wait_for_instruction();  
         check(R1_debug, 16'h1111,
             "Build R1 = 0x1111");
 
@@ -375,16 +384,18 @@ module processor_TB;
         // ============================================
         wait_for_instruction();
 
-        check(R2_debug, 16'h2345,
+        check(R0_debug, 16'h2345,
             "SIMD 4x4 ADD");
         // ==================================================
         // memory[32]
         // HALT
         // ==================================================
+        // wait_for_instruction();
         #10;
+
         check(halted_debug, 1'b1,
             "memory[32] HALT");
-
+        
         // Stack pointer unchanged
         check(sp_debug, 8'hFF,
             "SP unchanged");

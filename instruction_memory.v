@@ -51,7 +51,7 @@ initial begin
     memory[7]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
     memory[8]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
 
-    memory[9]  = 16'b0000_01_00_00010100; // LDI R1, 20
+    memory[9]  = 16'b0000_01_00_00010100; // LDI R1, 20 15:
     memory[10]  = {`OP_OR, `REG_R0, `REG_R1, 8'd0}; // OR R0, R1
 
 
@@ -79,7 +79,7 @@ initial begin
     // R0 = 0x1234
     // lanes: [1,2,3,4]
     
-    memory[24] = 16'b0000_00_00010010; // LDI R0, 0x12
+    memory[24] = 16'b0000_00_00_00010010; // LDI R0, 0x12
     memory[25] = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // shift/build upper nibble
     memory[26] = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};
     memory[27] = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};
@@ -88,10 +88,10 @@ initial begin
     memory[30] = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
     memory[31] = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
     memory[32] = {`OP_ADD, `REG_R0, `REG_R0, 8'd0}; // ADD R0, R0
-    memory[33] = 16'b0000_01_00110100; // LDI R1, 0x34
+    memory[33] = 16'b0000_01_00_00110100; // LDI R1, 0x34
     memory[34] = {`OP_OR, `REG_R0, `REG_R1, 8'd0}; // R0 = 0x1234
-    
-    memory[35] = 16'b0000_01_00010001; // LDI R1, 0x11
+
+    memory[35] = 16'b0000_01_00_00010001; // LDI R1, 0x11
     memory[36] = {`OP_ADD, `REG_R1, `REG_R1, 8'd0};
     memory[37] = {`OP_ADD, `REG_R1, `REG_R1, 8'd0};
     memory[38] = {`OP_ADD, `REG_R1, `REG_R1, 8'd0};
@@ -101,7 +101,7 @@ initial begin
     memory[42] = {`OP_ADD, `REG_R1, `REG_R1, 8'd0}; // ADD R0, R0
     memory[43] = {`OP_ADD, `REG_R1, `REG_R1, 8'd0}; // ADD R0, R0
 
-    memory[44] = 16'b0000_10_00010001; // LDI R2, 0x11
+    memory[44] = 16'b0000_10_00_00010001; // LDI R2, 0x11
     memory[45] = {`OP_OR, `REG_R1, `REG_R2, 8'd0}; // R1 = 0x1111
 
     // // SIMD 4x4 ADD
