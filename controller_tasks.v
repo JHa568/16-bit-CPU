@@ -136,14 +136,14 @@ endtask
 // LOAD Stage - Mainly for ALU execution
 task load_step;
     input [3:0] opcode;
-    input [11:0] params; // Retrieve Rx
+    input [11:0] params; // Retrieve Rx - 11:9 8:7 6:5 4:3
     output [31:0] cp;
     reg    [31:0] cp;
     begin
         case (opcode)
             `OP_SIMD: begin 
                 cp = 32'd0;
-                read_register(params[7:6], cp, cp);
+                read_register(params[6:5], cp, cp);
                 set_bus(`BUS_REG, cp, cp);
                 cp[21] = 1'b1; // A_en
             end
@@ -173,8 +173,8 @@ task execute_step;
         mode = params[8:7];
         
         if (opcode == `OP_SIMD) begin // For parallel ALU instruction
-            ry = params[5:4];
-
+            ry = params[4:3];
+            $display("Parallel ALU instruction...");
             read_register(ry, cp, cp);
             set_bus(`BUS_REG, cp, cp);
             
@@ -186,7 +186,7 @@ task execute_step;
                 default:  cp[19:17] = `ALU_ADD;
             endcase
             
-        end else begin
+        end else begin 
             ry = params[9:8];
 
             if (opcode == `OP_INC) begin
@@ -212,7 +212,7 @@ task execute_step;
 endtask
 
 // WRITEBACK Stage
-task writeback_step;
+task writeback_step; // 11:9, 8,7 6,5 4:3
     input      [3:0]  opcode;
     input      [11:0] params; // Retrieve rx
     output     [31:0] cp;
@@ -222,7 +222,7 @@ task writeback_step;
             `OP_SIMD: begin 
                 cp = 32'd0;
                 set_bus(`BUS_G, cp, cp);
-                write_register(params[7:6], cp, cp);
+                write_register(params[6:5], cp, cp);
             end
             default: begin
                 cp = 32'd0;

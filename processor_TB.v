@@ -60,6 +60,33 @@ module processor_TB;
     // 10 ns clock
     always #5 clk = ~clk;
 
+
+    task step_and_check;
+        input [15:0] expected;
+        input [255:0] name;
+
+        begin
+            // Wait until CPU returns to FETCH state
+            @(posedge clk);
+            wait(state_debug == 3'd0);
+
+            check(R0_debug, expected, name);
+        end
+    endtask
+
+
+    task wait_for_instruction;
+        begin
+            // Wait until CPU leaves FETCH
+            wait(state_debug != 4'd0);
+
+            // Wait until next FETCH
+            wait(state_debug == 4'd0);
+
+            // Small delay so register write settles
+            #1;
+        end
+    endtask
     // ----------------------------------------------------------
     // Cycle-by-cycle monitor
     // ----------------------------------------------------------
@@ -104,7 +131,7 @@ module processor_TB;
 
         clk = 1'b0;
         rst = 1'b1;
-        #20;
+        #10;
         rst = 1'b0;
 
         // --------------------------------------------------
@@ -113,8 +140,8 @@ module processor_TB;
         // PC_INC, DECODE + extra states for PUSH/POP).
         // 13 instructions x 6 cycles x 10ns = ~780ns, use 2000ns
         // --------------------------------------------------
-        wait (halted_debug == 1'b1);
-        #20; // settle
+        // wait (halted_debug == 1'b1);
+        // #20; // settle
 
         // --------------------------------------------------
         // Check results
@@ -148,31 +175,220 @@ module processor_TB;
         //     fail_count = fail_count + 1;
         // end
 
-
-        // --------------------------------------------------
-        // Check results
-        // --------------------------------------------------
         $display("");
         $display("=======================================================");
-        $display(" Final register checks");
+        $display(" Step-by-step instruction verification");
         $display("=======================================================");
 
-        // --- Pre-SIMD verified values ---
-        // R0: 10 ->(*2 x4)-> 160 | 20 = 180
-        check(R0_debug, 16'd180, "R0 (LDI 10, x4 ADD, OR 20 -> 180)");
+        // ============================================
+        // memory[0]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd10,
+            "memory[0] LDI R0,10");
 
-        // R1: 20 -> LDI 30 ->(*2 x4)-> 480 | 20 = 500
-        check(R1_debug, 16'd500, "R1 (LDI 30, x4 ADD, OR 20 -> 500)");
+        // ============================================
+        // memory[1]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd20,
+            "memory[1] ADD");
 
-        // --- SIMD result: update once implementation confirmed ---
-        // SIMD ADD then SIMD SUB both write to R2
-        // TODO: replace 16'd0 with the expected value from your SIMD unit
-        check(R0_debug, 16'd180,   "R0 (TODO: update with correct SIMD result)");
+        // ============================================
+        // memory[2]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd40,
+            "memory[2] ADD");
 
-        // SP should be untouched (no PUSH/POP in this program)
-        check(sp_debug, 8'hFF,   "SP (expect 0xFF — no stack ops)");
+        // ============================================
+        // memory[3]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd80,
+            "memory[3] ADD");
 
-        check(halted_debug, 1'b1, "halted");
+        // ============================================
+        // memory[4]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd160,
+            "memory[4] ADD");
+
+
+        wait_for_instruction();
+        check(R0_debug, 16'd320,
+            "memory[2] ADD");
+
+        // ============================================
+        // memory[3]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd640,
+            "memory[3] ADD");
+
+        // ============================================
+        // memory[4]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd1280,
+            "memory[4] ADD");
+
+        wait_for_instruction();
+        check(R0_debug, 16'd2560,
+            "memory[4] ADD");
+        /// ---passed
+        // ============================================
+        // memory[5]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd20,
+            "memory[5] LDI R1,20");
+
+        // ============================================
+        // memory[6]
+        // ============================================
+        wait_for_instruction();
+        check(R0_debug, 16'd2580,
+            "memory[6] OR");
+        // ---- Pass
+        // ============================================
+        // memory[7]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd30,
+            "memory[7] LDI R1,30");
+
+        // ============================================
+        // memory[8]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd60,
+            "memory[8] ADD");
+
+        // ============================================
+        // memory[9]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd120,
+            "memory[9] ADD");
+
+        // ============================================
+        // memory[10]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd240,
+            "memory[10] ADD");
+
+        // ============================================
+        // memory[11]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd480,
+            "memory[11] ADD");
+
+
+        wait_for_instruction();
+        check(R1_debug, 16'd960,
+            "memory[9] ADD");
+
+        // ============================================
+        // memory[10]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd1920,
+            "memory[10] ADD");
+
+        // ============================================
+        // memory[11]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd3840,
+            "memory[11] ADD");
+
+        // ============================================
+        // memory[12]
+        // ============================================
+        repeat(2) wait_for_instruction();
+        check(R2_debug, 16'd20,
+            "memory[12] LDI");
+
+        // ============================================
+        // memory[13]
+        // ============================================
+        wait_for_instruction();
+        check(R1_debug, 16'd3860,
+            "memory[13] OR");
+
+        // ============================================
+        // memory[14]
+        // ============================================
+        wait_for_instruction();
+
+        // TODO: update once SIMD ADD verified
+        check(R0_debug, 16'd6440,
+            "memory[14] SIMD ADD");
+
+        // ============================================
+        // memory[15]
+        // ============================================
+        wait_for_instruction();
+
+        // TODO: update once SIMD SUB verified
+        check(R0_debug, 16'hFB00,
+            "memory[15] SIMD SUB");
+
+        wait_for_instruction();  
+        check(R0_debug, 16'h12,
+            "memory[15] LDI 0x12");
+
+        // ============================================
+        // memory[17-23]
+        // ============================================
+        repeat(8) wait_for_instruction();
+
+        check(R0_debug, 16'h1200,
+            "Build R0 = 0x1200");
+
+        wait_for_instruction();
+        check(R0_debug, 16'h1234,
+            "Build R0 = 0x1234");
+
+        // ============================================
+        // memory[24-30]
+        // ============================================
+        wait_for_instruction();  
+        check(R1_debug, 16'h11,
+            "memory[15] LDI 0x11");
+
+        repeat(8) wait_for_instruction();
+
+        wait_for_instruction();  
+        check(R2_debug, 16'h11,
+            "memory[15] LDI 0x11");
+
+        check(R1_debug, 16'h1111,
+            "Build R1 = 0x1111");
+
+        // ============================================
+        // memory[31]
+        // ============================================
+        wait_for_instruction();
+
+        check(R2_debug, 16'h2345,
+            "SIMD 4x4 ADD");
+        // ==================================================
+        // memory[32]
+        // HALT
+        // ==================================================
+        #10;
+        check(halted_debug, 1'b1,
+            "memory[32] HALT");
+
+        // Stack pointer unchanged
+        check(sp_debug, 8'hFF,
+            "SP unchanged");
+
 
         // --------------------------------------------------
         // Summary
