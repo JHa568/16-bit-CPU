@@ -61,7 +61,7 @@ module processor_top(
     // ---------------------------------------------------------
     // Controller control signals
     // ---------------------------------------------------------
-    wire [31:0] control_plane;
+    wire [31:0] control_    plane;
     wire [3:0]  bus_sel;
     wire [1:0]  reg_out_sel;
     wire        reg_out_en;
@@ -78,6 +78,18 @@ module processor_top(
     wire        halted;
     wire        zero_flag;
     wire [3:0]  controller_state;
+
+    /*
+    bus_sel chooses what goes on the bus
+    reg_out_sel chooses which register outputs
+    reg_in_sel chooses which register stores
+    A_en stores bus into A
+    G_en stores ALU result into G
+    pc_en increments PC
+    ir_en loads instruction register
+
+
+    */
 
     // ---------------------------------------------------------
     // Program Counter
