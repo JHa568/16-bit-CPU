@@ -1,419 +1,236 @@
 `timescale 1ns / 1ps
-
+`include "constants.v"
 // =============================================================
-// processor_TB.v
+// instruction_memory.v — SIMD Average Function Demo
 // -------------------------------------------------------------
-// Testbench for PUSH / POP extension.
 //
-// Runs the following program and checks every stage:
-//   LDI R0,10 | LDI R1,20 | LDI R2,30
-//   PUSH R0   | PUSH R1   | PUSH R2
-//   LDI R0,0  | LDI R1,0  | LDI R2,0
-//   POP R0    | POP R1    | POP R2
-//   HALT
+// WHAT THIS PROGRAM DOES
+// ──────────────────────
+// Computes the average of two 8-bit values (A=10, B=20) using:
+//   • SIMD 2×8 ADD  to multiply both lanes simultaneously (×3)
+//   • AND mask      to unpack individual SIMD lanes to scalar
+//   • Repeated scalar SUB loop  to implement divide (no divide opcode)
+//   • PUSH / POP    to demonstrate a proper function call frame
 //
-// Expected final state:
-//   R0 = 30  R1 = 20  R2 = 10   (LIFO restored)
-//   SP = 0xFF                    (fully unwound)
-//   halted = 1
+// The function simd_avg(R0={A,B}) returns R0 = (3A + 3B) / 2 = 45
+//
+// INSTRUCTION FORMAT REMINDER
+// ────────────────────────────
+//   Standard : [15:12]=opcode  [11:10]=Rx  [9:8]=Ry  [7:0]=imm8
+//   SIMD     : [15:12]=OP_SIMD [11:9]=alu_ctl [8:7]=mode
+//                              [6:5]=Rx  [4:3]=Ry  [2:0]=000
+//
+// SIMD ENCODING USED
+// ──────────────────
+//   SIMD ADD 2×8 R0,R0 : 1110_000_01_00_00_000  (0xE080)
+//   SIMD ADD 2×8 R0,R1 : 1110_000_01_00_01_000  (0xE088)
+//   opcode=E  alu_ctl=000(ADD)  mode=01(2×8)  Rx=00(R0)  Ry=00/01
+//
+// REGISTER USAGE
+// ──────────────
+//   R0 = function argument / return value
+//   R1 = scratch (callee-saved: pushed on entry, popped on exit)
+//   R2 = scratch (callee-saved: pushed on entry, popped on exit)
+//
+// STACK LAYOUT DURING FUNCTION (full-descending, SP starts 0xFF)
+// ───────────────────────────────────────────────────────────────
+//   CALL site :  PUSH R0        → MEM[FF]=0x0A14,  SP=FE
+//   Func entry:  PUSH R1        → MEM[FE]=caller_R1, SP=FD
+//                PUSH R2        → MEM[FD]=caller_R2, SP=FC
+//   Func exit :  POP  R2        → R2 restored,      SP=FD
+//                POP  R1        → R1 restored,       SP=FE
+//   Return site: POP  R1        → original R0 back in R1, SP=FF
+//
+// EXPECTED RESULT
+// ───────────────
+//   After HALT:  R0 = 45  (= (3*10 + 3*20) / 2)
+//   The intermediate SIMD result R0={0x1E,0x3C}={30,60} is visible
+//   at instruction 24 in simulation.
+//
+// ADDRESS MAP
+// ───────────
+//   0 – 12  MAIN: build inputs, PUSH R0, CALL (JMP 20)
+//  13 – 14  RETURN SITE: POP R1, HALT
+//  15 – 19  Padding (unused)
+//  20 – 50  FUNCTION simd_avg
+//              20-21  callee-save R1, R2
+//              22-24  SIMD ×3 multiply
+//              25-29  extract lo lane via AND mask
+//              30-37  extract hi lane via ÷256 subtraction loop
+//              38-46  scalar sum + ÷2 subtraction loop
+//              47-50  move result, callee-restore, return (JMP 13)
 // =============================================================
 
-module processor_TB;
-
-    // ----------------------------------------------------------
-    // DUT signals
-    // ----------------------------------------------------------
-    reg  clk;
-    reg  rst;
-
-    wire        halted_debug;
-    wire [3:0]  state_debug;
-    wire [7:0]  pc_debug;
-    wire [15:0] instruction_debug;
-    wire [15:0] R0_debug;
-    wire [15:0] R1_debug;
-    wire [15:0] R2_debug;
-    wire [15:0] mem20_debug;
-    wire        zero_flag_debug;
-    wire [15:0] bus_debug;
-    wire [7:0]  sp_debug;
-
-    // ----------------------------------------------------------
-    // Instantiate processor
-    // ----------------------------------------------------------
-    processor_top uut (
-        .clk             (clk),
-        .rst             (rst),
-        .halted_debug    (halted_debug),
-        .state_debug     (state_debug),
-        .pc_debug        (pc_debug),
-        .instruction_debug(instruction_debug),
-        .R0_debug        (R0_debug),
-        .R1_debug        (R1_debug),
-        .R2_debug        (R2_debug),
-        .mem20_debug     (mem20_debug),
-        .zero_flag_debug (zero_flag_debug),
-        .bus_debug       (bus_debug),
-        .sp_debug        (sp_debug)
-    );
-
-    // 10 ns clock
-    always #5 clk = ~clk;
-
-
-    task step_and_check;
-        input [15:0] expected;
-        input [255:0] name;
-
-        begin
-            // Wait until CPU returns to FETCH state
-            @(posedge clk);
-            wait(state_debug == 3'd0);
-
-            check(R0_debug, expected, name);
-        end
-    endtask
-
-
-    task wait_for_instruction;
-        begin
-            // Wait until CPU leaves FETCH
-            wait(state_debug != 4'd0);
-
-            // Wait until next FETCH
-            wait(state_debug == 4'd0);
-
-            // Small delay so register write settles
-            #1;
-        end
-    endtask
-    // ----------------------------------------------------------
-    // Cycle-by-cycle monitor
-    // ----------------------------------------------------------
-    initial begin
-        $display("=======================================================");
-        $display(" Cycle-by-cycle trace");
-        $display("  t(ns) | PC | IR(hex) | R0  R1  R2 | SP   | state");
-        $display("=======================================================");
-        $monitor("%6t  | %2d | %h  | %3d  %3d  %3d | 0x%h | %1d",
-                 $time, pc_debug, instruction_debug,
-                 R0_debug, R1_debug, R2_debug,
-                 sp_debug, state_debug);
-    end
-
-    // ----------------------------------------------------------
-    // Main test sequence
-    // ----------------------------------------------------------
-    integer pass_count;
-    integer fail_count;
-
-    task check;
-        input [63:0] got;
-        input [63:0] expected;
-        input [255:0] label;
-        begin
-            if (got === expected) begin
-                $display("  [PASS] %s = %0d", label, got);
-                pass_count = pass_count + 1;
-            end else begin
-                $display("  [FAIL] %s : got %0d, expected %0d", label, got, expected);
-                fail_count = fail_count + 1;
-            end
-        end
-    endtask
-
-    initial begin
-        $dumpfile("final_cpu.vcd");
-        $dumpvars(0, processor_TB);
-
-        pass_count = 0;
-        fail_count = 0;
-
-        clk = 1'b0;
-        rst = 1'b1;
-        #10;
-        rst = 1'b0;
-
-        // --------------------------------------------------
-        // Wait for HALT
-        // Each instruction takes ~4 clock cycles (FETCH,
-        // PC_INC, DECODE + extra states for PUSH/POP).
-        // 13 instructions x 6 cycles x 10ns = ~780ns, use 2000ns
-        // --------------------------------------------------
-        // wait (halted_debug == 1'b1);
-        // #20; // settle
-
-        // --------------------------------------------------
-        // Check results
-        // --------------------------------------------------
-        // $display("");
-        // $display("=======================================================");
-        // $display(" Final register and stack checks");
-        // $display("=======================================================");
-
-        // check(R0_debug,  16'd30, "R0 (expect 30 — last POP is top of stack)");
-        // check(R1_debug,  16'd20, "R1 (expect 20)");
-        // check(R2_debug,  16'd10, "R2 (expect 10 — first pushed, last popped)");
-        // check(sp_debug,   8'hFF, "SP (expect 0xFF — fully unwound)");
-        // // check(halted_debug, 1'b1, "halted");
-
-        // // Also verify stack memory was written correctly
-        // // by checking the internal data_memory array
-        // $display("");
-        // $display("  Stack memory snapshot (written during PUSH phase):");
-        // $display("  mem[0xFF] = %0d (expect 10)", uut.dmem.memory[8'hFF]);
-        // $display("  mem[0xFE] = %0d (expect 20)", uut.dmem.memory[8'hFE]);
-        // $display("  mem[0xFD] = %0d (expect 30)", uut.dmem.memory[8'hFD]);
-
-        // if (uut.dmem.memory[8'hFF] == 16'd10 &&
-        //     uut.dmem.memory[8'hFE] == 16'd20 &&
-        //     uut.dmem.memory[8'hFD] == 16'd30) begin
-        //     $display("  [PASS] Stack memory contents correct");
-        //     pass_count = pass_count + 1;
-        // end else begin
-        //     $display("  [FAIL] Stack memory contents wrong");
-        //     fail_count = fail_count + 1;
-        // end
-
-        $display("");
-        $display("=======================================================");
-        $display(" Step-by-step instruction verification");
-        $display("=======================================================");
-
-        // ============================================
-        // memory[0]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd10,
-            "memory[0] LDI R0,10");
-
-        // ============================================
-        // memory[1]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd20,
-            "memory[1] ADD");
-
-        // ============================================
-        // memory[2]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd40,
-            "memory[2] ADD");
-
-        // ============================================
-        // memory[3]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd80,
-            "memory[3] ADD");
-
-        // ============================================
-        // memory[4]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd160,
-            "memory[4] ADD");
-
-
-        wait_for_instruction();
-        check(R0_debug, 16'd320,
-            "memory[2] ADD");
-
-        // ============================================
-        // memory[3]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd640,
-            "memory[3] ADD");
-
-        // ============================================
-        // memory[4]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd1280,
-            "memory[4] ADD");
-
-        wait_for_instruction();
-        check(R0_debug, 16'd2560,
-            "memory[4] ADD");
-        /// ---passed
-        // ============================================
-        // memory[5]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd20,
-            "memory[5] LDI R1,20");
-
-        // ============================================
-        // memory[6]
-        // ============================================
-        wait_for_instruction();
-        check(R0_debug, 16'd2580,
-            "memory[6] OR");
-        // ---- Pass
-        // ============================================
-        // memory[7]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd30,
-            "memory[7] LDI R1,30");
-
-        // ============================================
-        // memory[8]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd60,
-            "memory[8] ADD");
-
-        // ============================================
-        // memory[9]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd120,
-            "memory[9] ADD");
-
-        // ============================================
-        // memory[10]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd240,
-            "memory[10] ADD");
-
-        // ============================================
-        // memory[11]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd480,
-            "memory[11] ADD");
-
-
-        wait_for_instruction();
-        check(R1_debug, 16'd960,
-            "memory[9] ADD");
-
-        // ============================================
-        // memory[10]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd1920,
-            "memory[10] ADD");
-
-        // ============================================
-        // memory[11]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd3840,
-            "memory[11] ADD");
-
-        wait_for_instruction();
-        check(R1_debug, 16'd7680,
-            "memory[11] ADD");
-
-        // ============================================
-        // memory[12]
-        // ============================================
-        wait_for_instruction();
-        check(R2_debug, 16'd20,
-            "memory[12] LDI");
-
-        // ============================================
-        // memory[13]
-        // ============================================
-        wait_for_instruction();
-        check(R1_debug, 16'd7700,
-            "memory[13] OR");
-
-        // ============================================
-        // memory[14]
-        // ============================================
-        wait_for_instruction();
-
-        // TODO: update once SIMD ADD verified
-        check(R0_debug, 16'd10280,
-            "memory[14] SIMD ADD");
-
-        // ============================================
-        // memory[15]
-        // ============================================
-        wait_for_instruction();
-
-        // TODO: update once SIMD SUB verified
-        check(R0_debug, 16'd2580,
-            "memory[15] SIMD SUB");
-
-        wait_for_instruction();  
-        check(R0_debug, 16'h12,
-            "memory[15] LDI 0x12");
-
-        // ============================================
-        // memory[17-23]
-        // ============================================
-        repeat(8) wait_for_instruction();
-
-        check(R0_debug, 16'h1200,
-            "Build R0 = 0x1200");
-
-        wait_for_instruction();
-        check(R1_debug, 16'h34,
-            "Build R1 = 0x34");
-
-        wait_for_instruction();
-        check(R0_debug, 16'h1234,
-            "Build R0 = 0x1234");
-
-        // ============================================
-        // memory[24-30]
-        // ============================================
-        wait_for_instruction();  
-        check(R1_debug, 16'h11,
-            "memory[15] LDI 0x11");
-
-        repeat(8) wait_for_instruction();
-
-        wait_for_instruction();  
-        check(R2_debug, 16'h11,
-            "memory[15] LDI 0x11");
-
-        wait_for_instruction();  
-        check(R1_debug, 16'h1111,
-            "Build R1 = 0x1111");
-
-        // ============================================
-        // memory[31]
-        // ============================================
-        wait_for_instruction();
-
-        check(R0_debug, 16'h2345,
-            "SIMD 4x4 ADD");
-        // ==================================================
-        // memory[32]
-        // HALT
-        // ==================================================
-        // wait_for_instruction();
-        #10;
-
-        check(halted_debug, 1'b1,
-            "memory[32] HALT");
-        
-        // Stack pointer unchanged
-        check(sp_debug, 8'hFF,
-            "SP unchanged");
-
-
-        // --------------------------------------------------
-        // Summary
-        // --------------------------------------------------
-        $display("");
-        $display("=======================================================");
-        $display(" RESULT: %0d passed, %0d failed", pass_count, fail_count);
-        if (fail_count == 0)
-            $display(" ALL TESTS PASSED");
-        else
-            $display(" SOME TESTS FAILED");
-        $display("=======================================================");
-
-        $finish;
-    end
+module instruction_memory(
+    input  [7:0]  address,
+    output [15:0] instruction
+);
+
+reg [15:0] memory [255:0];
+
+initial begin
+
+    // =========================================================
+    // MAIN — build R0 = {A=10, B=20} = 0x0A14
+    // =========================================================
+    // LDI can only load 8-bit immediate into the low byte.
+    // To put 10 in the HIGH byte we shift left 8 with 8× ADD doublings.
+
+    memory[0]  = {`OP_LDI, `REG_R0, 2'b00, 8'd10};      // R0 = 0x000A
+    memory[1]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0014
+    memory[2]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0028
+    memory[3]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0050
+    memory[4]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x00A0
+    memory[5]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0140
+    memory[6]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0280
+    memory[7]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0500
+    memory[8]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0A00  (10 << 8)
+    memory[9]  = {`OP_LDI, `REG_R1, 2'b00, 8'd20};      // R1 = 0x0014  (B=20)
+    memory[10] = {`OP_OR,  `REG_R0, `REG_R1, 8'd0};     // R0 = 0x0A14  {A=10, B=20}
+
+    // =========================================================
+    // CALL SETUP
+    // ---------------------------------------------------------
+    // Push R0 onto the stack so the caller can inspect the
+    // original input after the function returns.
+    // Then JMP to the function (addr 20).
+    //
+    // Note: this ISA has no indirect jump (JMP always uses imm8),
+    // so the return address is baked into the function epilogue
+    // as a hardcoded JMP 13.
+    // =========================================================
+    memory[11] = {`OP_PUSH, `REG_R0, 2'b00, 8'd0};      // PUSH R0 → MEM[FF]=0x0A14, SP→FE
+    memory[12] = {`OP_JMP,  4'b0000, 8'd20};             // CALL: JMP simd_avg (addr 20)
+
+    // =========================================================
+    // RETURN SITE  (addr 13)
+    // Function jumps back here when done.
+    // =========================================================
+    memory[13] = {`OP_POP,  `REG_R1, 2'b00, 8'd0};      // POP R1 ← original R0=0x0A14, SP→FF
+    memory[14] = {`OP_HALT, 12'd0};                      // HALT — R0=45 is the average
+
+    // =========================================================
+    // Padding  (addr 15-19)
+    // =========================================================
+    memory[15] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};       // padding / unused
+    memory[16] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+    memory[17] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+    memory[18] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+    memory[19] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+
+    // =========================================================
+    // FUNCTION: simd_avg
+    // ---------------------------------------------------------
+    // Input:   R0 = {A, B}  (8-bit values packed as SIMD 2×8)
+    // Output:  R0 = (3*A + 3*B) / 2      [ = 45 for A=10, B=20 ]
+    // Trashes: uses MEM[50] as a spill slot
+    // Saves/restores R1, R2 (callee-saved convention)
+    // =========================================================
+
+    // ── Callee-save R1, R2 ───────────────────────────────────
+    memory[20] = {`OP_PUSH, `REG_R1, 2'b00, 8'd0};      // PUSH R1 → MEM[FE], SP→FD
+    memory[21] = {`OP_PUSH, `REG_R2, 2'b00, 8'd0};      // PUSH R2 → MEM[FD], SP→FC
+
+    // ── Step 1: SIMD ×3 — multiply BOTH lanes simultaneously ─
+    //
+    //   Two SIMD ADD instructions process lane-hi and lane-lo
+    //   in parallel. No carry can cross the 8-bit lane boundary.
+    //
+    //   R1 ← {A, B}              (original, used as addend)
+    //   R0 ← SIMD_ADD(R0, R0)   → {2A, 2B}
+    //   R0 ← SIMD_ADD(R0, R1)   → {3A, 3B} = {30, 60} = 0x1E3C
+    //
+    // SIMD encoding: [15:12]=E  [11:9]=000(ADD)  [8:7]=01(2×8)
+    //                [6:5]=Rx   [4:3]=Ry   [2:0]=000
+    memory[22] = {`OP_MOV,  `REG_R1, `REG_R0, 8'd0};    // R1 = {A,B} = 0x0A14
+    memory[23] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R0, 3'b000}; // R0={2A,2B}=0x1428
+    memory[24] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R1, 3'b000}; // R0={3A,3B}=0x1E3C
+
+    // ── Step 2: Extract lo lane (3B=60) via AND mask ─────────
+    //
+    //   LDI R2, 255  → R2 = 0x00FF
+    //   R1 = copy of R0 = 0x1E3C
+    //   AND R1, R2   → R1 = 0x003C = 60  (only lo byte survives)
+    memory[25] = {`OP_LDI, `REG_R2, 2'b00, 8'hFF};      // R2 = 0x00FF  (AND mask)
+    memory[26] = {`OP_MOV, `REG_R1, `REG_R0, 8'd0};     // R1 = 0x1E3C  copy
+    memory[27] = {`OP_AND, `REG_R1, `REG_R2, 8'd0};     // R1 = 0x003C = 60 = 3*B
+
+    // ── Step 3: Spill 3B, isolate 3A as a multiple of 256 ───
+    //
+    //   STORE R1, [50]   → MEM[50] = 60  (spill 3B for later)
+    //   SUB R0, R1       → R0 = 0x1E3C - 0x003C = 0x1E00 = 7680 = 3A*256
+    memory[28] = {`OP_STORE, `REG_R1, 2'b00, 8'd50};    // MEM[50] = 60
+    memory[29] = {`OP_SUB,   `REG_R0, `REG_R1, 8'd0};  // R0 = 3A*256 = 7680
+
+    // ── Step 4: Divide R0 by 256 → R1 = 3A = 30 ─────────────
+    //
+    //   255 is the largest 8-bit immediate; 256 = 255+1.
+    //   INC R2 (where R2=255) gives R2=256 without a wider constant.
+    //
+    //   Loop: subtract 256 from R0, count iterations.
+    //   BEQ fires immediately after SUB (before INC) to capture
+    //   the cycle where R0 hits exactly zero.
+    //
+    //   loop_hi [33]:
+    //       SUB R0, R2       ; R0 -= 256
+    //       BEQ done_hi [37] ; branch if R0 == 0
+    //       INC R1           ; counter++
+    //       JMP loop_hi [33]
+    //   done_hi [37]:
+    //       INC R1           ; count the final iteration
+    //   → R1 = 30 = 3*A
+    memory[30] = {`OP_LDI, `REG_R2, 2'b00, 8'd255};    // R2 = 255
+    memory[31] = {`OP_INC, `REG_R2, 2'b00, 8'd0};      // R2 = 256  (INC trick)
+    memory[32] = {`OP_LDI, `REG_R1, 2'b00, 8'd0};      // R1 = 0  (loop counter)
+
+    // loop_hi: addr 33
+    memory[33] = {`OP_SUB, `REG_R0, `REG_R2, 8'd0};    // R0 -= 256
+    memory[34] = {`OP_BEQ, 4'b0000, 8'd37};             // if R0==0 → done_hi (37)
+    memory[35] = {`OP_INC, `REG_R1, 2'b00, 8'd0};      // R1++
+    memory[36] = {`OP_JMP, 4'b0000, 8'd33};             // JMP loop_hi
+
+    // done_hi: addr 37
+    memory[37] = {`OP_INC, `REG_R1, 2'b00, 8'd0};      // R1++ (final count) → R1 = 30
+
+    // ── Step 5: Scalar sum 3A + 3B ───────────────────────────
+    //
+    //   LOAD R0, [50]    → R0 = 60 = 3B  (reload spilled value)
+    //   ADD  R0, R1      → R0 = 60 + 30 = 90 = 3A + 3B
+    memory[38] = {`OP_LOAD, `REG_R0, 2'b00, 8'd50};    // R0 = 3B = 60
+    memory[39] = {`OP_ADD,  `REG_R0, `REG_R1, 8'd0};  // R0 = 90 = 3A + 3B
+
+    // ── Step 6: Divide R0 by 2 → R1 = average = 45 ──────────
+    //
+    //   Same repeated-subtraction pattern, divisor=2.
+    //
+    //   loop_div [42]:
+    //       SUB R0, R2       ; R0 -= 2
+    //       BEQ done_div[46] ; branch if R0 == 0
+    //       INC R1           ; quotient++
+    //       JMP loop_div[42]
+    //   done_div [46]:
+    //       INC R1           ; count final iteration
+    //   → R1 = 45
+    memory[40] = {`OP_LDI, `REG_R1, 2'b00, 8'd0};     // R1 = 0  (quotient)
+    memory[41] = {`OP_LDI, `REG_R2, 2'b00, 8'd2};     // R2 = 2  (divisor)
+
+    // loop_div: addr 42
+    memory[42] = {`OP_SUB, `REG_R0, `REG_R2, 8'd0};   // R0 -= 2
+    memory[43] = {`OP_BEQ, 4'b0000, 8'd46};            // if R0==0 → done_div (46)
+    memory[44] = {`OP_INC, `REG_R1, 2'b00, 8'd0};     // R1++
+    memory[45] = {`OP_JMP, 4'b0000, 8'd42};            // JMP loop_div
+
+    // done_div: addr 46
+    memory[46] = {`OP_INC, `REG_R1, 2'b00, 8'd0};     // R1++ → R1 = 45
+
+    // ── Epilogue: move result to R0, restore callee-saved regs ─
+    memory[47] = {`OP_MOV,  `REG_R0, `REG_R1, 8'd0};  // R0 = 45  (return value)
+    memory[48] = {`OP_POP,  `REG_R2, 2'b00, 8'd0};    // POP R2 ← restored, SP→FD
+    memory[49] = {`OP_POP,  `REG_R1, 2'b00, 8'd0};    // POP R1 ← restored, SP→FE
+    memory[50] = {`OP_JMP,  4'b0000, 8'd13};           // RETURN: JMP 13 (return site)
+
+end
+
+assign instruction = memory[address];
 
 endmodule
