@@ -1,13 +1,17 @@
 `timescale 1ns / 1ps
 
+
 module controller_fsm(
     input             clk,
     input             rst,
 
-    input      [15:0] instruction,
+    input      [3:0]  opcode,
+    input      [1:0]  rx,
+    input      [1:0]  ry,
     input             zero_flag,
 
     output reg [31:0] control_plane,
+
     output reg [3:0]  bus_sel,
     output reg [1:0]  reg_out_sel,
     output reg        reg_out_en,
@@ -27,7 +31,6 @@ module controller_fsm(
     output reg        sp_push,
     output reg        sp_pop,
     output reg        use_sp_addr,
-    output reg [1:0]  mode,
 
     output reg [3:0]  state_debug
 );
@@ -50,26 +53,12 @@ module controller_fsm(
     reg [3:0] state;
     reg [3:0] next_state;
 
-    // Decoded instruction
-    reg [3:0] opcode;
-    reg [11:0] params;
-    reg [1:0] rx;
-    reg [1:0] ry;
-
     // State register
     always @(posedge clk or posedge rst) begin
         if (rst)
             state <= S_FETCH;
         else
             state <= next_state;
-    end
-
-    // Instruction 
-    always @(*) begin
-        opcode = instruction[15:12];
-        params = instruction[11:0];
-        rx = params[11:10];
-        ry = params[9:8];
     end
 
     // Next-state logic
@@ -85,7 +74,7 @@ module controller_fsm(
 
             S_DECODE: begin
                 case (opcode)
-                    `OP_ADD, `OP_SUB, `OP_AND, `OP_OR, `OP_XOR, `OP_INC, `OP_SIMD: begin
+                    `OP_ADD, `OP_SUB, `OP_AND, `OP_OR, `OP_XOR, `OP_INC: begin
                         next_state = S_LOAD_A;
                     end
                     `OP_PUSH: next_state = S_PUSH_WRITE;
@@ -110,17 +99,17 @@ module controller_fsm(
     end
 
     // Output/control logic
-    // Pipeline Multi-stage Cycle
     always @(*) begin
         control_plane = 32'd0;
 
         case (state)
             S_FETCH:      fetch_step(control_plane);
             S_PC_INC:     pc_increment_step(control_plane);
-            S_DECODE:     simple_instruction_step(opcode, params, zero_flag, control_plane);
-            S_LOAD_A:     load_step(opcode, params, control_plane);
-            S_EXEC_ALU:   execute_step(opcode, params, control_plane);
-            S_WRITEBACK:  writeback_step(opcode, params, control_plane);
+            S_DECODE:     simple_instruction_step(opcode, rx, ry, zero_flag, control_plane);
+            S_LOAD_A:     load_step(rx, control_plane);
+            S_EXEC_ALU:   execute_step(opcode, ry, control_plane);
+            S_WRITEBACK:  writeback_step(rx, control_plane);
+
             S_PUSH_WRITE: push_write_step(rx, control_plane);
             S_PUSH_DEC:   push_dec_step(control_plane);
             S_POP_INC:    pop_inc_step(control_plane);
@@ -152,7 +141,7 @@ module controller_fsm(
         sp_push     = control_plane[10];
         sp_pop      = control_plane[9];
         use_sp_addr = control_plane[8];
-        mode        = control_plane[7:6];
         state_debug = state;
     end
+
 endmodule

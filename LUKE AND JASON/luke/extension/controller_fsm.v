@@ -27,7 +27,15 @@ module controller_fsm(
     output reg mem_write,
     output reg status_en,
 
+   // --------------------------------------------------------
+    output reg sp_push,      // asserted to decrement SP (after PUSH write)
+    output reg sp_pop,       // asserted to increment SP (before POP read)
+    output reg use_sp_addr,  // use SP as data memory address instead of immediate
+    // --------------------------------------------------------
+    
+   
     output reg done
+
 );
 
     // Instructions
@@ -44,6 +52,8 @@ module controller_fsm(
     parameter JMP   = 4'b1010;
     parameter BEQ   = 4'b1011;
     parameter HALT  = 4'b1111;
+    parameter PUSH  = 4'b1100;  // Jason
+    parameter POP   = 4'b1101;  // jasooinqwiof
 
     // Bus sources
     parameter BUS_R0  = 3'b000;
@@ -73,6 +83,10 @@ module controller_fsm(
     parameter BEQ_EXEC  = 4'b1000;
     parameter DONE      = 4'b1001;
     parameter STOP      = 4'b1010;
+    parameter PUSH_EXEC1  = 4'b1011;  // asfjioasfjioa
+    parameter PUSH_EXEC2  = 4'b1100;  //heheheeee
+    parameter POP_EXEC1   = 4'b1101;  // ZNOOOOOOOOOOOOO
+    parameter POP_EXEC2   = 4'b1110;  // w
 
     reg [3:0] state, next_state;
 
@@ -117,7 +131,15 @@ module controller_fsm(
                     BEQ: begin
                         next_state = BEQ_EXEC;
                     end
-
+                    //-----------------------------------------
+                    PUSH: begin
+                        next_state = PUSH_EXEC1; 
+                    end
+ 
+                    POP: begin
+                        next_state = POP_EXEC1; 
+                    end
+                    //-----------------------------------------
                     HALT: begin
                         next_state = STOP;
                     end
@@ -155,7 +177,24 @@ module controller_fsm(
             BEQ_EXEC: begin
                 next_state = DONE;
             end
-
+             //--------------------------------------------
+            PUSH_EXEC1: begin
+                next_state = PUSH_EXEC2; // PUSH: write Rx to mem[SP], then decrement SP
+            end
+ 
+            PUSH_EXEC2: begin
+                next_state = DONE; 
+            end
+ 
+            // POP: increment SP, then read mem[SP] into Rx
+            POP_EXEC1: begin
+                next_state = POP_EXEC2; 
+            end
+ 
+            POP_EXEC2: begin
+                next_state = DONE; 
+            end
+            //--------------------------------------------
             DONE: begin
                 next_state = FETCH;
             end
@@ -192,7 +231,11 @@ module controller_fsm(
 
         mem_write = 1'b0;
         status_en = 1'b0;
-
+        //---------------------------------------------------------
+        sp_push     = 1'b0;
+        sp_pop      = 1'b0;
+        use_sp_addr = 1'b0;
+        //---------------------------------------------------------
         done = 1'b0;
 
         case (state)
@@ -305,6 +348,41 @@ module controller_fsm(
                 if (zero_flag)
                     pc_load = 1'b1;
             end
+             //-------------------------------------------
+             // PUSH EXEC1: write bus(Rx) into mem[SP]
+            PUSH_EXEC1: begin
+                case (rx)
+                    2'b00: bus_sel = BUS_R0;
+                    2'b01: bus_sel = BUS_R1;
+                    2'b10: bus_sel = BUS_R2;
+                endcase
+ 
+                use_sp_addr = 1'b1;   // address data memory with SP
+                mem_write   = 1'b1;   // write to mem[SP] on clock edge
+            end
+ 
+            // PUSH EXEC2: decrement SP
+            PUSH_EXEC2: begin
+                sp_push = 1'b1;       // SP-- on clock edge
+            end
+ 
+            // POP EXEC1: increment SP
+            POP_EXEC1: begin
+                sp_pop = 1'b1;        // SP++ on clock edge
+            end
+ 
+            // POP EXEC2: read mem[SP] → Rx
+            POP_EXEC2: begin
+                bus_sel     = BUS_MEM;   // combinational read of mem[SP]
+                use_sp_addr = 1'b1;      // address with updated SP
+ 
+                case (rx)
+                    2'b00: R0_en = 1'b1;
+                    2'b01: R1_en = 1'b1;
+                    2'b10: R2_en = 1'b1;
+                endcase
+            end
+                //-------------------------------------------
 
             DONE: begin
                 done = 1'b1;

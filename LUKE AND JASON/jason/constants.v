@@ -24,13 +24,7 @@
 `define OP_BEQ    4'hB   // Branch if zero:      if zero_flag PC = imm
 `define OP_PUSH   4'hC   // Push: MEM[SP] = Rx, SP--
 `define OP_POP    4'hD   // Pop:  SP++, Rx = MEM[SP]
-`define OP_SIMD   4'hE   // SIMD: <alu_ctl> <mode> <Rx> <Ry>
 `define OP_HALT   4'hF   // Stop processor
-
-// SIMD ALU - 00=scalar | 01=SIMD 2x8 | 10=SIMD 4x4
-`define M_SCALAR     2'b00
-`define M_SIMD_2X8   2'b01
-`define M_SIMD_4X4   2'b10
 
 // -------------------------------------------------------------
 // Register IDs

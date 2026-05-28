@@ -53,7 +53,35 @@ module processor_top(
     wire mem_write;
     wire status_en;
     wire zero_flag;
+    
+    
+    // -------------------------------------------------------
+    wire sp_push; //Jason
+    wire sp_pop;
+    wire use_sp_addr;
+    
+    // Stack Pointer (SP)
+    // Full-descending: SP starts at 0xFF (top of data memory)
+    // PUSH: write to mem[SP], then SP--
+    // POP:  SP++, then read from mem[SP]
+    // -------------------------------------------------------
+    reg [7:0] SP;
+ 
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            SP <= 8'hFF;          // reset to top of memory
+        else if (sp_push)
+            SP <= SP - 1'b1;      // post-write decrement
+        else if (sp_pop)
+            SP <= SP + 1'b1;      // pre-read increment
+    end
+        // Data memory address: SP when stack operation, else instruction immediate
+    wire [7:0] dmem_addr = use_sp_addr ? SP : instruction[7:0];
+    
+    // -------------------------------------------------------
 
+   
+   
     assign opcode = instruction[15:12];
     assign rx = instruction[11:10];
     assign ry = instruction[9:8];
@@ -115,6 +143,12 @@ module processor_top(
         .mem_write(mem_write),
         .status_en(status_en),
 
+        //-------------------------------------------
+        .sp_push(sp_push),
+        .sp_pop(sp_pop),
+        .use_sp_addr(use_sp_addr),
+        //-------------------------------------------
+
         .done(done)
     );
 
@@ -158,7 +192,7 @@ module processor_top(
     data_memory dmem(
         .clk(clk),
         .mem_write(mem_write),
-        .address(instruction[7:0]),
+        .address(dmem_addr),//.address(instruction[7:0]),
         .write_data(bus),
         .read_data(memory_data)
     );
