@@ -1,0 +1,120 @@
+=========================================================
+ Cycle trace
+  t(ns) | PC | IR(hex) | R0    R1    R2   | SP   | st
+=========================================================
+VCD info: dumpfile final_cpu.vcd opened for output.
+
+=========================================================
+ Phase 1 â€” Build packed input R0 = 0x0A14
+=========================================================
+  [PASS] [0]  LDI R0, ÿÿÿâÿ’ R0=10                got 10 (0x000a)
+  [PASS] [1]  ADD R0,Rÿÿÿâÿ’ R0=20                got 20 (0x0014)
+  [PASS] [2]  ADD R0,Rÿÿÿâÿ’ R0=40                got 40 (0x0028)
+  [PASS] [3]  ADD R0,Rÿÿÿâÿ’ R0=80                got 80 (0x0050)
+  [PASS] [4]  ADD R0,R0ÿÿÿ†’ R0=160               got 160 (0x00a0)
+  [PASS] [5]  ADD R0,R0ÿÿÿ†’ R0=320               got 320 (0x0140)
+  [PASS] [6]  ADD R0,R0ÿÿÿ†’ R0=640               got 640 (0x0280)
+  [PASS] [7]  ADD R0,R0 ÿÿÿ’ R0=1280              got 1280 (0x0500)
+  [PASS]  ADD R0,R0  â†’ R0=0x0A00 (A<<8)         got 2560 (0x0a00)
+  [PASS] [9]  LDI R1,2ÿÿÿâÿ’ R1=20                got 20 (0x0014)
+  [PASS] 0,R1   â†’ R0=0x0A14 {A=10,B=20}         got 2580 (0x0a14)
+
+=========================================================
+ Phase 2 â€” Call setup: PUSH input, JMP to function
+=========================================================
+  [PASS] [11] PUSH R0   ÿÿÿ’ SP=0xFE              got 0xfe
+  [PASS] 12] JMP 20     â†’ SP still 0xFE         got 0xfe
+
+=========================================================
+ Phase 3 â€” Function entry: callee-save R1 and R2
+=========================================================
+  [PASS] [20] PUSH R1   ÿÿÿ’ SP=0xFD              got 0xfd
+  [PASS] [21] PUSH R2   ÿÿÿ’ SP=0xFC              got 0xfc
+
+=========================================================
+ Phase 4 â€” SIMD 2x8 multiply both lanes by 3
+=========================================================
+  [PASS] ] MOV R1,R0  â†’ R1=0x0A14 {A,B}         got 2580 (0x0a14)
+Parallel ALU instruction...
+  [PASS]  ADD R0,R0 â†’ R0=0x1428 {2A,2B}         got 5160 (0x1428)
+Parallel ALU instruction...
+  [PASS]  ADD R0,R1 â†’ R0=0x1E3C {30,60}         got 7740 (0x1e3c)
+
+=========================================================
+ Phase 5 â€” Unpack lo lane (3B=60) via AND 0x00FF mask
+=========================================================
+  [PASS] [25] LDI R2,0xÿÿÿâÿ’ R2=0x00FF           got 255 (0x00ff)
+  [PASS] [26] MOV R1,R0ÿÿÿâÿ’ R1=0x1E3C           got 7740 (0x1e3c)
+  [PASS] ND R1,R2   â†’ R1=0x003C (3B=60)         got 60 (0x003c)
+
+=========================================================
+ Phase 6 â€” Spill 3B to MEM[50], isolate 3A*256
+=========================================================
+  [PASS] RE R1,[50] â†’ SP unchanged 0xFC         got 0xfc
+  [PASS] R1   â†’ R0=0x1E00 (3A*256=7680)         got 7680 (0x1e00)
+
+=========================================================
+ Phase 7 â€” Divide by 256 loop â†’ R1 = 3A = 30
+=========================================================
+  [PASS] [30] LDI R2,255ÿÿÿ†’ R2=255              got 255 (0x00ff)
+  [PASS] [31] INC R2    ÿÿÿ†’ R2=256              got 256 (0x0100)
+  [PASS] ] LDI R1,0    â†’ R1=0 (counter)         got 0 (0x0000)
+  ... waiting for divide-by-256 loop (30 iterations) ...
+  [PASS] 7] done_hi: R0=0 (fully divided)         got 0 (0x0000)
+  [PASS] 7] done_hi: R1=30 (= 3*A = 3*10)         got 30 (0x001e)
+
+=========================================================
+ Phase 8 â€” Scalar sum 3A + 3B = 90
+=========================================================
+  [PASS] 0,[50] â†’ R0=60 (3B from spill)         got 60 (0x003c)
+  [PASS] 9] ADD R0,R1   â†’ R0=90 (3A+3B)         got 90 (0x005a)
+
+=========================================================
+ Phase 9 â€” Divide by 2 loop â†’ R1 = average = 45
+=========================================================
+  [PASS]  LDI R1,0    â†’ R1=0 (quotient)         got 0 (0x0000)
+  [PASS] ] LDI R2,2    â†’ R2=2 (divisor)         got 2 (0x0002)
+  ... waiting for divide-by-2 loop (45 iterations) ...
+  [PASS] ] done_div: R0=0 (fully divided)         got 0 (0x0000)
+  [PASS] [46] done_div: R1=45 (average)           got 45 (0x002d)
+
+=========================================================
+ Phase 10 â€” Epilogue: result â†’ R0, restore regs, return
+=========================================================
+  [PASS] ] MOV R0,R1   â†’ R0=45 (result)         got 45 (0x002d)
+  [PASS]  POP R2      â†’ R2=0 (restored)         got 0 (0x0000)
+  [PASS] [48] POP R2     ÿÿÿ’ SP=0xFD             got 0xfd
+  [PASS] POP R1      â†’ R1=20 (restored)         got 20 (0x0014)
+  [PASS] [49] POP R1     ÿÿÿ’ SP=0xFE             got 0xfe
+  [PASS] [50] JMP 13     ÿÿÿ’ R0 still 45         got 45 (0x002d)
+
+=========================================================
+ Phase 11 â€” Return site: POP original input, HALT
+=========================================================
+  [PASS]   â†’ R1=0x0A14 (original input)         got 2580 (0x0a14)
+  [PASS]      â†’ SP=0xFF (fully unwound)         got 0xff
+
+=========================================================
+ Phase 12 â€” Final state verification
+=========================================================
+  [PASS] FINAL R0 = 45 (average result)           got 45 (0x002d)
+  [PASS] 0x0A14 (original input restored)         got 2580 (0x0a14)
+  [PASS] 0 (callee-saved, fully restored)         got 0 (0x0000)
+  [PASS] FINAL SP = 0xFF (fully unwound)          got 0xff
+  [PASS] FINAL halted = 1                         got 1
+
+  Stack memory snapshot:
+    MEM[0xFF] = 0x0a14  (expect 0x0A14 â€” caller pushed R0)
+    MEM[0xFE] = 20      (expect 20 â€” callee saved R1)
+    MEM[0xFD] = 0       (expect 0  â€” callee saved R2)
+    MEM[50]   = 60      (expect 60 â€” 3B spill slot)
+  [PASS] MEM[0xFF] = 0x0A14
+  [PASS] MEM[0xFE] = 20
+  [PASS] MEM[0xFD] = 0
+  [PASS] MEM[50] = 60 (3B spill slot)
+
+=========================================================
+ RESULT: 51 passed, 0 failed
+ ALL TESTS PASSED
+=========================================================
+processor_TB.v:514: $finish called at 15115000 (1ps)
