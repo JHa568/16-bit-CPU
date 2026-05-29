@@ -66,171 +66,171 @@ module instruction_memory(
     output [15:0] instruction
 );
 
-reg [15:0] memory [255:0];
+    reg [15:0] memory [255:0];
 
-initial begin
+    initial begin
 
-    // =========================================================
-    // MAIN — build R0 = {A=10, B=20} = 0x0A14
-    // =========================================================
-    // LDI can only load 8-bit immediate into the low byte.
-    // To put 10 in the HIGH byte we shift left 8 with 8× ADD doublings.
+        // =========================================================
+        // MAIN — build R0 = {A=10, B=20} = 0x0A14
+        // =========================================================
+        // LDI can only load 8-bit immediate into the low byte.
+        // To put 10 in the HIGH byte we shift left 8 with 8× ADD doublings.
 
-    memory[0]  = {`OP_LDI, `REG_R0, 2'b00, 8'd10};      // R0 = 0x000A
-    memory[1]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0014
-    memory[2]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0028
-    memory[3]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0050
-    memory[4]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x00A0
-    memory[5]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0140
-    memory[6]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0280
-    memory[7]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0500
-    memory[8]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0A00  (10 << 8)
-    memory[9]  = {`OP_LDI, `REG_R1, 2'b00, 8'd20};      // R1 = 0x0014  (B=20)
-    memory[10] = {`OP_OR,  `REG_R0, `REG_R1, 8'd0};     // R0 = 0x0A14  {A=10, B=20}
+        memory[0]  = {`OP_LDI, `REG_R0, 2'b00, 8'd10};      // R0 = 0x000A
+        memory[1]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0014
+        memory[2]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0028
+        memory[3]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0050
+        memory[4]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x00A0
+        memory[5]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0140
+        memory[6]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0280
+        memory[7]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0500
+        memory[8]  = {`OP_ADD, `REG_R0, `REG_R0, 8'd0};     // R0 = 0x0A00  (10 << 8)
+        memory[9]  = {`OP_LDI, `REG_R1, 2'b00, 8'd20};      // R1 = 0x0014  (B=20)
+        memory[10] = {`OP_OR,  `REG_R0, `REG_R1, 8'd0};     // R0 = 0x0A14  {A=10, B=20}
 
-    // =========================================================
-    // CALL SETUP
-    // ---------------------------------------------------------
-    // Push R0 onto the stack so the caller can inspect the
-    // original input after the function returns.
-    // Then JMP to the function (addr 20).
-    //
-    // Note: this ISA has no indirect jump (JMP always uses imm8),
-    // so the return address is baked into the function epilogue
-    // as a hardcoded JMP 13.
-    // =========================================================
-    memory[11] = {`OP_PUSH, `REG_R0, 2'b00, 8'd0};      // PUSH R0 → MEM[FF]=0x0A14, SP→FE
-    memory[12] = {`OP_JMP,  4'b0000, 8'd20};             // CALL: JMP simd_avg (addr 20)
+        // =========================================================
+        // CALL SETUP
+        // ---------------------------------------------------------
+        // Push R0 onto the stack so the caller can inspect the
+        // original input after the function returns.
+        // Then JMP to the function (addr 20).
+        //
+        // Note: this ISA has no indirect jump (JMP always uses imm8),
+        // so the return address is baked into the function epilogue
+        // as a hardcoded JMP 13.
+        // =========================================================
+        memory[11] = {`OP_PUSH, `REG_R0, 2'b00, 8'd0};      // PUSH R0 → MEM[FF]=0x0A14, SP→FE
+        memory[12] = {`OP_JMP,  4'b0000, 8'd20};             // CALL: JMP simd_avg (addr 20)
 
-    // =========================================================
-    // RETURN SITE  (addr 13)
-    // Function jumps back here when done.
-    // =========================================================
-    memory[13] = {`OP_POP,  `REG_R1, 2'b00, 8'd0};      // POP R1 ← original R0=0x0A14, SP→FF
-    memory[14] = {`OP_HALT, 12'd0};                      // HALT — R0=45 is the average
+        // =========================================================
+        // RETURN SITE  (addr 13)
+        // Function jumps back here when done.
+        // =========================================================
+        memory[13] = {`OP_POP,  `REG_R1, 2'b00, 8'd0};      // POP R1 ← original R0=0x0A14, SP→FF
+        memory[14] = {`OP_HALT, 12'd0};                      // HALT — R0=45 is the average
 
-    // =========================================================
-    // Padding  (addr 15-19)
-    // =========================================================
-    memory[15] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};       // padding / unused
-    memory[16] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
-    memory[17] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
-    memory[18] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
-    memory[19] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+        // =========================================================
+        // Padding  (addr 15-19)
+        // =========================================================
+        memory[15] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};       // padding / unused
+        memory[16] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+        memory[17] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+        memory[18] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
+        memory[19] = {`OP_LDI, `REG_R2, 2'b00, 8'd0};
 
-    // =========================================================
-    // FUNCTION: simd_avg
-    // ---------------------------------------------------------
-    // Input:   R0 = {A, B}  (8-bit values packed as SIMD 2×8)
-    // Output:  R0 = (3*A + 3*B) / 2      [ = 45 for A=10, B=20 ]
-    // Trashes: uses MEM[50] as a spill slot
-    // Saves/restores R1, R2 (callee-saved convention)
-    // =========================================================
+        // =========================================================
+        // FUNCTION: simd_avg
+        // ---------------------------------------------------------
+        // Input:   R0 = {A, B}  (8-bit values packed as SIMD 2×8)
+        // Output:  R0 = (3*A + 3*B) / 2      [ = 45 for A=10, B=20 ]
+        // Trashes: uses MEM[50] as a spill slot
+        // Saves/restores R1, R2 (callee-saved convention)
+        // =========================================================
 
-    // ── Callee-save R1, R2 ───────────────────────────────────
-    memory[20] = {`OP_PUSH, `REG_R1, 2'b00, 8'd0};      // PUSH R1 → MEM[FE], SP→FD
-    memory[21] = {`OP_PUSH, `REG_R2, 2'b00, 8'd0};      // PUSH R2 → MEM[FD], SP→FC
+        // ── Callee-save R1, R2 ───────────────────────────────────
+        memory[20] = {`OP_PUSH, `REG_R1, 2'b00, 8'd0};      // PUSH R1 → MEM[FE], SP→FD
+        memory[21] = {`OP_PUSH, `REG_R2, 2'b00, 8'd0};      // PUSH R2 → MEM[FD], SP→FC
 
-    // ── Step 1: SIMD ×3 — multiply BOTH lanes simultaneously ─
-    //
-    //   Two SIMD ADD instructions process lane-hi and lane-lo
-    //   in parallel. No carry can cross the 8-bit lane boundary.
-    //
-    //   R1 ← {A, B}              (original, used as addend)
-    //   R0 ← SIMD_ADD(R0, R0)   → {2A, 2B}
-    //   R0 ← SIMD_ADD(R0, R1)   → {3A, 3B} = {30, 60} = 0x1E3C
-    //
-    // SIMD encoding: [15:12]=E  [11:9]=000(ADD)  [8:7]=01(2×8)
-    //                [6:5]=Rx   [4:3]=Ry   [2:0]=000
-    memory[22] = {`OP_MOV,  `REG_R1, `REG_R0, 8'd0};    // R1 = {A,B} = 0x0A14
-    memory[23] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R0, 3'b000}; // R0={2A,2B}=0x1428
-    memory[24] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R1, 3'b000}; // R0={3A,3B}=0x1E3C
+        // ── Step 1: SIMD ×3 — multiply BOTH lanes simultaneously ─
+        //
+        //   Two SIMD ADD instructions process lane-hi and lane-lo
+        //   in parallel. No carry can cross the 8-bit lane boundary.
+        //
+        //   R1 ← {A, B}              (original, used as addend)
+        //   R0 ← SIMD_ADD(R0, R0)   → {2A, 2B}
+        //   R0 ← SIMD_ADD(R0, R1)   → {3A, 3B} = {30, 60} = 0x1E3C
+        //
+        // SIMD encoding: [15:12]=E  [11:9]=000(ADD)  [8:7]=01(2×8)
+        //                [6:5]=Rx   [4:3]=Ry   [2:0]=000
+        memory[22] = {`OP_MOV,  `REG_R1, `REG_R0, 8'd0};    // R1 = {A,B} = 0x0A14
+        memory[23] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R0, 3'b000}; // R0={2A,2B}=0x1428
+        memory[24] = {`OP_SIMD, `ALU_ADD, `M_SIMD_2X8, `REG_R0, `REG_R1, 3'b000}; // R0={3A,3B}=0x1E3C
 
-    // ── Step 2: Extract lo lane (3B=60) via AND mask ─────────
-    //
-    //   LDI R2, 255  → R2 = 0x00FF
-    //   R1 = copy of R0 = 0x1E3C
-    //   AND R1, R2   → R1 = 0x003C = 60  (only lo byte survives)
-    memory[25] = {`OP_LDI, `REG_R2, 2'b00, 8'hFF};      // R2 = 0x00FF  (AND mask)
-    memory[26] = {`OP_MOV, `REG_R1, `REG_R0, 8'd0};     // R1 = 0x1E3C  copy
-    memory[27] = {`OP_AND, `REG_R1, `REG_R2, 8'd0};     // R1 = 0x003C = 60 = 3*B
+        // ── Step 2: Extract lo lane (3B=60) via AND mask ─────────
+        //
+        //   LDI R2, 255  → R2 = 0x00FF
+        //   R1 = copy of R0 = 0x1E3C
+        //   AND R1, R2   → R1 = 0x003C = 60  (only lo byte survives)
+        memory[25] = {`OP_LDI, `REG_R2, 2'b00, 8'hFF};      // R2 = 0x00FF  (AND mask)
+        memory[26] = {`OP_MOV, `REG_R1, `REG_R0, 8'd0};     // R1 = 0x1E3C  copy
+        memory[27] = {`OP_AND, `REG_R1, `REG_R2, 8'd0};     // R1 = 0x003C = 60 = 3*B
 
-    // ── Step 3: Spill 3B, isolate 3A as a multiple of 256 ───
-    //
-    //   STORE R1, [50]   → MEM[50] = 60  (spill 3B for later)
-    //   SUB R0, R1       → R0 = 0x1E3C - 0x003C = 0x1E00 = 7680 = 3A*256
-    memory[28] = {`OP_STORE, `REG_R1, 2'b00, 8'd50};    // MEM[50] = 60
-    memory[29] = {`OP_SUB,   `REG_R0, `REG_R1, 8'd0};  // R0 = 3A*256 = 7680
+        // ── Step 3: Spill 3B, isolate 3A as a multiple of 256 ───
+        //
+        //   STORE R1, [50]   → MEM[50] = 60  (spill 3B for later)
+        //   SUB R0, R1       → R0 = 0x1E3C - 0x003C = 0x1E00 = 7680 = 3A*256
+        memory[28] = {`OP_STORE, `REG_R1, 2'b00, 8'd50};    // MEM[50] = 60
+        memory[29] = {`OP_SUB,   `REG_R0, `REG_R1, 8'd0};  // R0 = 3A*256 = 7680
 
-    // ── Step 4: Divide R0 by 256 → R1 = 3A = 30 ─────────────
-    //
-    //   255 is the largest 8-bit immediate; 256 = 255+1.
-    //   INC R2 (where R2=255) gives R2=256 without a wider constant.
-    //
-    //   Loop: subtract 256 from R0, count iterations.
-    //   BEQ fires immediately after SUB (before INC) to capture
-    //   the cycle where R0 hits exactly zero.
-    //
-    //   loop_hi [33]:
-    //       SUB R0, R2       ; R0 -= 256
-    //       BEQ done_hi [37] ; branch if R0 == 0
-    //       INC R1           ; counter++
-    //       JMP loop_hi [33]
-    //   done_hi [37]:
-    //       INC R1           ; count the final iteration
-    //   → R1 = 30 = 3*A
-    memory[30] = {`OP_LDI, `REG_R2, 2'b00, 8'd255};    // R2 = 255
-    memory[31] = {`OP_INC, `REG_R2, 2'b00, 8'd0};      // R2 = 256  (INC trick)
-    memory[32] = {`OP_LDI, `REG_R1, 2'b00, 8'd0};      // R1 = 0  (loop counter)
+        // ── Step 4: Divide R0 by 256 → R1 = 3A = 30 ─────────────
+        //
+        //   255 is the largest 8-bit immediate; 256 = 255+1.
+        //   INC R2 (where R2=255) gives R2=256 without a wider constant.
+        //
+        //   Loop: subtract 256 from R0, count iterations.
+        //   BEQ fires immediately after SUB (before INC) to capture
+        //   the cycle where R0 hits exactly zero.
+        //
+        //   loop_hi [33]:
+        //       SUB R0, R2       ; R0 -= 256
+        //       BEQ done_hi [37] ; branch if R0 == 0
+        //       INC R1           ; counter++
+        //       JMP loop_hi [33]
+        //   done_hi [37]:
+        //       INC R1           ; count the final iteration
+        //   → R1 = 30 = 3*A
+        memory[30] = {`OP_LDI, `REG_R2, 2'b00, 8'd255};    // R2 = 255
+        memory[31] = {`OP_INC, `REG_R2, 2'b00, 8'd0};      // R2 = 256  (INC trick)
+        memory[32] = {`OP_LDI, `REG_R1, 2'b00, 8'd0};      // R1 = 0  (loop counter)
 
-    // loop_hi: addr 33
-    memory[33] = {`OP_SUB, `REG_R0, `REG_R2, 8'd0};    // R0 -= 256
-    memory[34] = {`OP_BEQ, 4'b0000, 8'd37};             // if R0==0 → done_hi (37)
-    memory[35] = {`OP_INC, `REG_R1, 2'b00, 8'd0};      // R1++
-    memory[36] = {`OP_JMP, 4'b0000, 8'd33};             // JMP loop_hi
+        // loop_hi: addr 33
+        memory[33] = {`OP_SUB, `REG_R0, `REG_R2, 8'd0};    // R0 -= 256
+        memory[34] = {`OP_BEQ, 4'b0000, 8'd37};             // if R0==0 → done_hi (37)
+        memory[35] = {`OP_INC, `REG_R1, 2'b00, 8'd0};      // R1++
+        memory[36] = {`OP_JMP, 4'b0000, 8'd33};             // JMP loop_hi
 
-    // done_hi: addr 37
-    memory[37] = {`OP_INC, `REG_R1, 2'b00, 8'd0};      // R1++ (final count) → R1 = 30
+        // done_hi: addr 37
+        memory[37] = {`OP_INC, `REG_R1, 2'b00, 8'd0};      // R1++ (final count) → R1 = 30
 
-    // ── Step 5: Scalar sum 3A + 3B ───────────────────────────
-    //
-    //   LOAD R0, [50]    → R0 = 60 = 3B  (reload spilled value)
-    //   ADD  R0, R1      → R0 = 60 + 30 = 90 = 3A + 3B
-    memory[38] = {`OP_LOAD, `REG_R0, 2'b00, 8'd50};    // R0 = 3B = 60
-    memory[39] = {`OP_ADD,  `REG_R0, `REG_R1, 8'd0};  // R0 = 90 = 3A + 3B
+        // ── Step 5: Scalar sum 3A + 3B ───────────────────────────
+        //
+        //   LOAD R0, [50]    → R0 = 60 = 3B  (reload spilled value)
+        //   ADD  R0, R1      → R0 = 60 + 30 = 90 = 3A + 3B
+        memory[38] = {`OP_LOAD, `REG_R0, 2'b00, 8'd50};    // R0 = 3B = 60
+        memory[39] = {`OP_ADD,  `REG_R0, `REG_R1, 8'd0};  // R0 = 90 = 3A + 3B
 
-    // ── Step 6: Divide R0 by 2 → R1 = average = 45 ──────────
-    //
-    //   Same repeated-subtraction pattern, divisor=2.
-    //
-    //   loop_div [42]:
-    //       SUB R0, R2       ; R0 -= 2
-    //       BEQ done_div[46] ; branch if R0 == 0
-    //       INC R1           ; quotient++
-    //       JMP loop_div[42]
-    //   done_div [46]:
-    //       INC R1           ; count final iteration
-    //   → R1 = 45
-    memory[40] = {`OP_LDI, `REG_R1, 2'b00, 8'd0};     // R1 = 0  (quotient)
-    memory[41] = {`OP_LDI, `REG_R2, 2'b00, 8'd2};     // R2 = 2  (divisor)
+        // ── Step 6: Divide R0 by 2 → R1 = average = 45 ──────────
+        //
+        //   Same repeated-subtraction pattern, divisor=2.
+        //
+        //   loop_div [42]:
+        //       SUB R0, R2       ; R0 -= 2
+        //       BEQ done_div[46] ; branch if R0 == 0
+        //       INC R1           ; quotient++
+        //       JMP loop_div[42]
+        //   done_div [46]:
+        //       INC R1           ; count final iteration
+        //   → R1 = 45
+        memory[40] = {`OP_LDI, `REG_R1, 2'b00, 8'd0};     // R1 = 0  (quotient)
+        memory[41] = {`OP_LDI, `REG_R2, 2'b00, 8'd2};     // R2 = 2  (divisor)
 
-    // loop_div: addr 42
-    memory[42] = {`OP_SUB, `REG_R0, `REG_R2, 8'd0};   // R0 -= 2
-    memory[43] = {`OP_BEQ, 4'b0000, 8'd46};            // if R0==0 → done_div (46)
-    memory[44] = {`OP_INC, `REG_R1, 2'b00, 8'd0};     // R1++
-    memory[45] = {`OP_JMP, 4'b0000, 8'd42};            // JMP loop_div
+        // loop_div: addr 42
+        memory[42] = {`OP_SUB, `REG_R0, `REG_R2, 8'd0};   // R0 -= 2
+        memory[43] = {`OP_BEQ, 4'b0000, 8'd46};            // if R0==0 → done_div (46)
+        memory[44] = {`OP_INC, `REG_R1, 2'b00, 8'd0};     // R1++
+        memory[45] = {`OP_JMP, 4'b0000, 8'd42};            // JMP loop_div
 
-    // done_div: addr 46
-    memory[46] = {`OP_INC, `REG_R1, 2'b00, 8'd0};     // R1++ → R1 = 45
+        // done_div: addr 46
+        memory[46] = {`OP_INC, `REG_R1, 2'b00, 8'd0};     // R1++ → R1 = 45
 
-    // ── Epilogue: move result to R0, restore callee-saved regs ─
-    memory[47] = {`OP_MOV,  `REG_R0, `REG_R1, 8'd0};  // R0 = 45  (return value)
-    memory[48] = {`OP_POP,  `REG_R2, 2'b00, 8'd0};    // POP R2 ← restored, SP→FD
-    memory[49] = {`OP_POP,  `REG_R1, 2'b00, 8'd0};    // POP R1 ← restored, SP→FE
-    memory[50] = {`OP_JMP,  4'b0000, 8'd13};           // RETURN: JMP 13 (return site)
+        // ── Epilogue: move result to R0, restore callee-saved regs ─
+        memory[47] = {`OP_MOV,  `REG_R0, `REG_R1, 8'd0};  // R0 = 45  (return value)
+        memory[48] = {`OP_POP,  `REG_R2, 2'b00, 8'd0};    // POP R2 ← restored, SP→FD
+        memory[49] = {`OP_POP,  `REG_R1, 2'b00, 8'd0};    // POP R1 ← restored, SP→FE
+        memory[50] = {`OP_JMP,  4'b0000, 8'd13};           // RETURN: JMP 13 (return site)
 
-end
+    end
 
-assign instruction = memory[address];
+    assign instruction = memory[address];
 
 endmodule
